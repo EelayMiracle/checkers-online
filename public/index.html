@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Checkers Multiplayer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="controls">
+  <button id="createRoom">Создать комнату</button>
+  <div id="roomIdDisplay"></div>
+  <input id="roomIdInput" placeholder="Введите Room ID">
+  <button id="joinRoom">Подключиться</button>
+</div>
+
+<div id="turnDisplay">
+  <span class="turn-label">Ход:</span>
+  <span id="turnColorBox"></span>
+</div>
+
+<div id="board"></div>
+
+<script>
+let roomId=null, playerColor=null, selectedPiece=null;
+let roomState=null; // полный state комнаты с сервера (/state)
+let legalMoves=[];  // [{x,y}, ...] клетки, куда можно сходить выбранной шашкой
+const boardEl=document.getElementById('board');
+
+function clearMoveDots(){
+  document.querySelectorAll('.move-dot').forEach(el=>el.remove());
+}
+
+function renderMoveDots(destinations){
+  clearMoveDots();
+  for(const {x,y} of destinations){
+    const cell=boardEl.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+    if(!cell) continue;
+    const dot=document.createElement('div');
+    dot.className='move-dot';
+    cell.appendChild(dot);
+  }
+}
+
+// ===== ЛОКАЛЬНАЯ ЛОГИКА ХОДОВ (копия серверной), подсветка не должна идти через сервер =====
+function isClearDiagonal(board,from,to){
+  const dx=Math.sign(to.x-from.x), dy=Math.sign(to.y-from.y);
+  let x=from.x+dx, y=from.y+dy;
+  while(x!==to.x){
+    if(board[y][x]) return false;
+    x+=dx; y+=dy;
+  }
+  return true;
+}
+
+function hasAnyCaptureOnBoard(board,pos,piece){
+  const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];
+  const inBounds=(x,y)=>x>=0&&x<8&&y>=0&&y<8;
+
+  if(piece.king){
+    for(const [dX,dY] of dirs){
+      let x=pos.x+dX, y=pos.y+dY;
+      while(inBounds(x,y)){
+        const t=board[y][x];
+        if(!t){
+          x+=dX; y+=dY;
+          continue;
+        }
+        if(t.color===piece.color) break;
+        // нашли врага — нужна хотя бы одна пустая клетка за ним
+        x+=dX; y+=dY;
+        while(inBounds(x,y)){
+          const t2=board[y][x];
+          if(!t2) return true;
+          break;
+        }
+        break;
+      }
+    }
+    return false;
+  }
+
+  for(const [dX,dY] of dirs){
+    const mx=pos.x+dX,my=pos.y+dY;
+    const tx=pos.x+2*dX,ty=pos.y+2*dY;
+    if(!inBounds(tx,ty)) continue;
+    const mid=board?.[my]?.[mx];
+    if(mid && mid.color!==piece.color && !board[ty][tx]) return true;
+  }
+  return false;
+}
+
+function getCaptures(board,pos,piece){
+  const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];
+  const res=[];
+  if(piece.king){
+    // Дамка: после взятия можно приземлиться на любую клетку за битой шашкой.
+    // Новое правило: если среди клеток приземления есть такие, с которых можно продолжить бой,
+    // то разрешены ТОЛЬКО они (нельзя остановиться на ближней клетке, если есть продолжение дальше).
+
+    const inBounds=(x,y)=>x>=0&&x<8&&y>=0&&y<8;
+    const cloneBoard=(b)=>b.map(row=>row.map(p=>p?{...p}:null));
+
+    for(const[dX,dY]of dirs){
+      let x=pos.x+dX,y=pos.y+dY;
+      let enemy=null;
+      while(inBounds(x,y)){
+        const t=board[y][x];
+        if(t){
+          if(t.color===piece.color) break;
+          enemy={x,y};
+          break;
+        }
+        x+=dX; y+=dY;
+      }
+      if(!enemy) continue;
+
+      const landings=[];
+      x=enemy.x+dX; y=enemy.y+dY;
+      while(inBounds(x,y) && !board[y][x]){
+        landings.push({x,y});
+        x+=dX; y+=dY;
+      }
+      if(landings.length===0) continue;
+
+      const landingWithContinuation=[];
+      for(const landing of landings){
+        const sim=cloneBoard(board);
+        sim[pos.y][pos.x]=null;
+        sim[enemy.y][enemy.x]=null;
+        sim[landing.y][landing.x]={...piece};
+        if(hasAnyCaptureOnBoard(sim,{x:landing.x,y:landing.y},sim[landing.y][landing.x])) landingWithContinuation.push(landing);
+      }
+
+      const allowedLandings = landingWithContinuation.length>0 ? landingWithContinuation : landings;
+      for(const landing of allowedLandings){
+        res.push({from:pos,over:enemy,to:{x:landing.x,y:landing.y}});
+      }
+    }
+  }else{
+    for(const[dX,dY]of dirs){
+      const mx=pos.x+dX,my=pos.y+dY;
+      const tx=pos.x+2*dX,ty=pos.y+2*dY;
+      if(tx<0||tx>7||ty<0||ty>7) continue;
+      const mid=board[my][mx];
+      if(mid&&mid.color!==piece.color&&!board[ty][tx])
+        res.push({from:pos,over:{x:mx,y:my},to:{x:tx,y:ty}});
+    }
+  }
+  return res;
+}
+
+function playerMustCapture(board,color){
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+    const p=board[y][x];
+    if(p&&p.color===color&&getCaptures(board,{x,y},p).length) return true;
+  }
+  return false;
+}
+
+function getQuietMoves(board,pos,piece){
+  const res=[];
+  if(piece.king){
+    const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];
+    for(const[dX,dY]of dirs){
+      let x=pos.x+dX,y=pos.y+dY;
+      while(x>=0&&x<8&&y>=0&&y<8){
+        if(board[y][x]) break;
+        res.push({from:pos,to:{x,y}});
+        x+=dX;y+=dY;
+      }
+    }
+  }else{
+    const forward=piece.color==='white'?-1:1;
+    for(const [dX,dY] of [[1,forward],[-1,forward]]){
+      const tx=pos.x+dX,ty=pos.y+dY;
+      if(tx>=0&&tx<8&&ty>=0&&ty<8&&!board[ty][tx]) res.push({from:pos,to:{x:tx,y:ty}});
+    }
+  }
+  return res;
+}
+
+function computeLegalDestinations(board,playerColor,selectedPiece,roomState){
+  if(!roomState||!selectedPiece) return [];
+  if(roomState.turn!==playerColor) return [];
+
+  const piece=board?.[selectedPiece.y]?.[selectedPiece.x];
+  if(!piece||piece.color!==playerColor) return [];
+
+  if(roomState.mustContinue!=null){
+    if(roomState.mustContinue.player!==playerColor) return [];
+    if(selectedPiece.x!==roomState.mustContinue.x||selectedPiece.y!==roomState.mustContinue.y) return [];
+    return getCaptures(board,selectedPiece,piece).map(c=>c.to);
+  }
+
+  const mustCapture=playerMustCapture(board,playerColor);
+  if(mustCapture) return getCaptures(board,selectedPiece,piece).map(c=>c.to);
+  return getQuietMoves(board,selectedPiece,piece).map(m=>m.to);
+}
+
+function createBoardUI(){
+  boardEl.innerHTML='';
+  for(let y=0;y<8;y++){
+    for(let x=0;x<8;x++){
+      const c=document.createElement('div');
+      c.className='cell '+((x+y)%2===0?'white':'black');
+      c.dataset.x=x; c.dataset.y=y;
+      boardEl.appendChild(c);
+    }
+  }
+}
+
+function renderBoard(board){
+  createBoardUI();
+  for(let y=0;y<8;y++){
+    for(let x=0;x<8;x++){
+      const p=board[y][x];
+      if(p){
+        const cell=boardEl.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+        const el=document.createElement('div');
+        el.className='piece '+p.color;
+        if(p.king) el.classList.add('king');
+        if(selectedPiece && selectedPiece.x===x && selectedPiece.y===y) el.classList.add('selected');
+        cell.appendChild(el);
+      }
+    }
+  }
+
+  // маркеры ходов рисуем поверх клеток
+  renderMoveDots(legalMoves);
+}
+
+function startPolling(){
+  setInterval(async ()=>{
+    if(!roomId) return;
+    const r=await fetch(`/room/${roomId}/state`);
+    const d=await r.json();
+
+    roomState=d;
+
+    const colorBox=document.getElementById('turnColorBox');
+    if(colorBox){
+      if(roomState.turn==='white'){
+        colorBox.style.backgroundColor='#ffffff';
+        colorBox.style.border='1px solid #000000';
+      }else{
+        colorBox.style.backgroundColor='#000000';
+        colorBox.style.border='1px solid #ffffff';
+      }
+    }
+
+    // подсветку видит только тот, кто ходит
+    if(!playerColor || roomState.turn!==playerColor){
+      selectedPiece=null;
+      legalMoves=[];
+    }
+
+    // если нужно продолжать серию взятий — автоселектим нужную шашку
+    if(playerColor && roomState.mustContinue && roomState.mustContinue.player===playerColor){
+      selectedPiece={x:roomState.mustContinue.x,y:roomState.mustContinue.y};
+    }
+
+    legalMoves = (playerColor && selectedPiece)
+      ? computeLegalDestinations(roomState.board, playerColor, selectedPiece, roomState)
+      : [];
+
+    renderBoard(d.board);
+  },1000);
+}
+
+document.getElementById('createRoom').onclick=async()=>{
+  const r=await fetch('/room/create');
+  const d=await r.json();
+  roomId=d.roomId;
+  document.getElementById('roomIdDisplay').textContent='Room ID: '+roomId;
+  document.getElementById('roomIdInput').value=roomId;
+
+  // создатель комнаты автоматически подключается за белых
+  const jr=await fetch(`/room/${roomId}/join`);
+  const jd=await jr.json();
+  if(jd.error) return; // тихо
+  playerColor=jd.color;
+  if(playerColor==='black') boardEl.classList.add('flipped');
+  else boardEl.classList.remove('flipped');
+};
+
+document.getElementById('joinRoom').onclick=async()=>{
+  const id=document.getElementById('roomIdInput').value.trim();
+  if(!id) return;
+  const r=await fetch(`/room/${id}/join`);
+  const d=await r.json();
+  if(d.error) return alert(d.error);
+  roomId=id;
+  playerColor=d.color;
+  if(playerColor==='black') boardEl.classList.add('flipped');
+  else boardEl.classList.remove('flipped');
+};
+
+boardEl.addEventListener('click',async e=>{
+  const cell=e.target.closest('.cell');
+  if(!cell||!playerColor) return;
+  const x=+cell.dataset.x, y=+cell.dataset.y;
+  const piece=cell.querySelector('.piece');
+
+  if(piece && piece.classList.contains(playerColor)){
+    // нельзя выбирать шашки, если сейчас не ваш ход
+    if(!roomState || roomState.turn!==playerColor) return;
+    // если надо продолжать взятие — выбрать можно только нужную шашку
+    if(roomState.mustContinue && (x!==roomState.mustContinue.x || y!==roomState.mustContinue.y)) return;
+
+    document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
+    piece.classList.add('selected');
+    selectedPiece={x,y};
+
+    legalMoves=computeLegalDestinations(roomState.board,playerColor,selectedPiece,roomState);
+    renderMoveDots(legalMoves);
+    return;
+  }
+
+  if(selectedPiece){
+    // тихий UX: если клик не по разрешённой клетке — просто ничего не делаем
+    const isLegal=legalMoves.some(m=>m.x===x&&m.y===y);
+    if(!isLegal) return;
+
+    const r=await fetch(`/room/${roomId}/move`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({from:selectedPiece,to:{x,y},player:playerColor})
+    });
+    const d=await r.json();
+
+    // без alert: если ошибка — ничего не меняем
+    if(d.error) return;
+
+    // успех
+    if(d.board) roomState = {...(roomState||{}), board:d.board};
+    if(typeof d.turn === 'string') roomState.turn = d.turn;
+    if('mustContinue' in d) roomState.mustContinue = d.mustContinue;
+
+    if(d.mustContinue){
+      // серия взятий продолжается
+      if(roomState) roomState.mustContinue=d.mustContinue;
+      selectedPiece={x:d.mustContinue.x,y:d.mustContinue.y};
+      legalMoves=computeLegalDestinations(d.board,playerColor,selectedPiece,roomState);
+      renderBoard(d.board);
+      return;
+    }
+
+    // ход завершён
+    selectedPiece=null;
+    legalMoves=[];
+    clearMoveDots();
+    document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
+    if(d.board) renderBoard(d.board);
+  }
+});
+
+createBoardUI();
+startPolling();
+</script>
+</body>
+</html>
