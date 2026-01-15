@@ -2,6 +2,14 @@ import express from 'express';
 import { nanoid } from 'nanoid';
 const app=express();
 app.use(express.json());
+
+// Чтобы браузер не держал старые версии index.html/style.css в кеше,
+// иначе кажется что "ничего не поменялось".
+app.use((req,res,next)=>{
+  res.setHeader('Cache-Control','no-store');
+  next();
+});
+
 app.use(express.static('public'));
 
 const rooms={};
@@ -134,25 +142,112 @@ function playerMustCapture(room,color){
 
 app.get('/room/create',(req,res)=>{
   const id=nanoid(6);
-  rooms[id]={id,board:createInitialBoard(),players:{},turn:'white',mustContinue:null};
+  rooms[id]={
+    id,
+    board:createInitialBoard(),
+    // Сеансы игроков: seat=1/2 (Игрок 1/2) НЕ меняется.
+    // Цвет (white/black) может меняться после rematch.
+    clientToSeat:{},
+    connected:{p1:false,p2:false},
+    colors:{p1:'white',p2:'black'},
+    profiles:{
+      p1:{avatar:'🙂', name:''},
+      p2:{avatar:'🙂', name:''},
+    },
+    turn:'white',
+    mustContinue:null,
+    gameId:1,
+  };
   res.json({roomId:id});
 });
 
 app.get('/room/:id/join',(req,res)=>{
   const room=rooms[req.params.id];
   if(!room) return res.status(404).json({error:'Room not found'});
-  let color;
-  if(!room.players.white) color='white';
-  else if(!room.players.black) color='black';
-  else return res.status(400).json({error:'Room full'});
-  room.players[color]=true;
-  res.json({color});
+
+  const clientId=(req.query.clientId||'').toString().trim();
+  if(!clientId) return res.status(400).json({error:'clientId required'});
+
+  // Уже есть seat для этого clientId
+  const existingSeat=room.clientToSeat[clientId];
+  if(existingSeat===1){
+    room.connected.p1=true;
+    return res.json({seat:1,color:room.colors.p1});
+  }
+  if(existingSeat===2){
+    room.connected.p2=true;
+    return res.json({seat:2,color:room.colors.p2});
+  }
+
+  // Новый клиент — выдаём свободное место
+  if(!room.connected.p1){
+    room.clientToSeat[clientId]=1;
+    room.connected.p1=true;
+    return res.json({seat:1,color:room.colors.p1});
+  }
+  if(!room.connected.p2){
+    room.clientToSeat[clientId]=2;
+    room.connected.p2=true;
+    return res.json({seat:2,color:room.colors.p2});
+  }
+
+  return res.status(400).json({error:'Room full'});
+});
+
+app.post('/room/:id/profile',(req,res)=>{
+  const room=rooms[req.params.id];
+  if(!room) return res.status(404).json({error:'Room not found'});
+
+  const {clientId,name,avatar}=req.body||{};
+  const cid=(clientId||'').toString().trim();
+  if(!cid) return res.status(400).json({error:'clientId required'});
+
+  const seat=room.clientToSeat[cid];
+  if(seat!==1 && seat!==2) return res.status(400).json({error:'Not joined'});
+  const seatKey = seat===1 ? 'p1' : 'p2';
+
+  // name — это ДОПОЛНИТЕЛЬНОЕ имя, может быть пустым (тогда в UI не показываем)
+  const safeName=(name||'').toString().trim().slice(0,32);
+  const safeAvatar=(avatar||'').toString().trim().slice(0,4);
+  room.profiles[seatKey]={
+    name: safeName,
+    avatar: safeAvatar || room.profiles[seatKey]?.avatar || '🙂',
+  };
+
+  res.json({ok:true,seat,profile:room.profiles[seatKey]});
 });
 
 app.get('/room/:id/state',(req,res)=>{
   const room=rooms[req.params.id];
   if(!room) return res.status(404).json({error:'Room not found'});
-  res.json(room);
+  // отдаём только публичные поля
+  res.json({
+    id:room.id,
+    board:room.board,
+    turn:room.turn,
+    mustContinue:room.mustContinue,
+    connected:room.connected,
+    profiles:room.profiles,
+    colors:room.colors,
+    gameId:room.gameId,
+  });
+});
+
+app.post('/room/:id/rematch',(req,res)=>{
+  const room=rooms[req.params.id];
+  if(!room) return res.status(404).json({error:'Room not found'});
+
+  // Новая игра в этой же комнате + обмен цветов игроков.
+  const prevP1=room.colors.p1;
+  room.colors.p1=room.colors.p2;
+  room.colors.p2=prevP1;
+
+  room.board=createInitialBoard();
+  room.turn='white';
+  room.mustContinue=null;
+  room.gameId=(room.gameId||1)+1;
+
+  res.json({ok:true,gameId:room.gameId});
 });
 
 // ===== Та самая версия move, как ты указал =====
