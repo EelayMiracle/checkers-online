@@ -8,10 +8,21 @@
 <body>
 
 <div class="controls">
-  <button id="createRoom">Создать комнату</button>
-  <div id="roomIdDisplay"></div>
-  <input id="roomIdInput" placeholder="Введите Room ID">
-  <button id="joinRoom">Подключиться</button>
+  <button class="bubbly-button" id="createRoom">Создать комнату</button>
+  <button class="bubbly-button" id="rematch" disabled>Рематч</button>
+  <button class="bubbly-button" id="invite" disabled>Пригласить друга</button>
+
+  <input id="roomIdInput" placeholder="Код комнаты">
+  <button class="bubbly-button" id="joinRoom">Подключиться</button>
+
+  <div id="toast" class="toast">ссылка скопирована</div>
+</div>
+
+<div id="winnerBanner" class="winner-banner" style="display:none;"></div>
+
+<div class="topbar" id="topbar" style="display:none;">
+  <div class="player-card left" id="p1Card"></div>
+  <div class="player-card right" id="p2Card"></div>
 </div>
 
 <div id="turnDisplay">
@@ -21,11 +32,191 @@
 
 <div id="board"></div>
 
+<!-- Модалка выбора имени и аватара -->
+<div class="modal-backdrop" id="profileModalBackdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <h2 id="profileTitle">Имя игрока и аватар</h2>
+
+    <div class="row">
+      <label for="profileName">Имя:</label>
+      <input id="profileName" placeholder="Ваш ник" />
+    </div>
+
+    <div class="row" style="align-items:flex-start;">
+      <div>
+        <div style="font-weight:800; margin-bottom:6px;">Аватар:</div>
+        <div class="avatar-grid" id="avatarGrid"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="bubbly-button" id="profileOk">ОК</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let roomId=null, playerColor=null, selectedPiece=null;
+let seat=null; // 1 или 2
 let roomState=null; // полный state комнаты с сервера (/state)
 let legalMoves=[];  // [{x,y}, ...] клетки, куда можно сходить выбранной шашкой
 const boardEl=document.getElementById('board');
+
+// Устойчивый id клиента в рамках вкладки (sessionStorage),
+// чтобы в новой вкладке по ссылке друг не становился тем же игроком.
+const CLIENT_ID_KEY='checkers_client_id_v1';
+function getOrCreateClientId(){
+  let v=sessionStorage.getItem(CLIENT_ID_KEY);
+  if(v) return v;
+  v = (crypto?.randomUUID ? crypto.randomUUID() : (Date.now()+"_"+Math.random().toString(16).slice(2)));
+  sessionStorage.setItem(CLIENT_ID_KEY,v);
+  return v;
+}
+const clientId=getOrCreateClientId();
+// Дополнительно защитимся от ситуации "дубликат вкладки" (одинаковый sessionStorage):
+// если два окна увидели один и тот же clientId, один из них сам создаст новый.
+// Это нужно, чтобы в одном браузере можно было открыть ссылку друга и стать Игроком 2.
+const INSTANCE_ID=(crypto?.randomUUID ? crypto.randomUUID() : (Date.now()+"_"+Math.random().toString(16).slice(2)));
+try{
+  const bc=new BroadcastChannel('checkers_client_presence_v1');
+  bc.onmessage=(ev)=>{
+    const msg=ev?.data;
+    if(!msg || msg.type!=='hello') return;
+    if(msg.clientId!==clientId) return;
+    if(msg.instanceId===INSTANCE_ID) return;
+
+    // коллизия clientId: оставляем тот instanceId, который "меньше", второй генерит новый id.
+    // (детерминированно, чтобы не было бесконечной перегенерации)
+    if(String(INSTANCE_ID) > String(msg.instanceId)){
+      const newId=(crypto?.randomUUID ? crypto.randomUUID() : (Date.now()+"_"+Math.random().toString(16).slice(2)));
+      sessionStorage.setItem(CLIENT_ID_KEY,newId);
+      location.reload();
+    }
+  };
+  bc.postMessage({type:'hello',clientId,instanceId:INSTANCE_ID});
+}catch{
+  // BroadcastChannel может быть недоступен — игнорируем
+}
+
+// Профиль
+// Профиль храним РАЗДЕЛЬНО по seat, чтобы не переносилось между игроками
+const PROFILE_NAME_KEY=(s)=>`checkers_profile_name_v1_seat_${s}`;
+const PROFILE_AVATAR_KEY=(s)=>`checkers_profile_avatar_v1_seat_${s}`;
+const AVATARS=["😃","😊","😈","👽","🤖","👻","😼","🦊","🐯","🦁","🐉","🐥","🦋"];
+let chosenAvatar=null;
+let profileConfirmed=false;
+let lastGameId=null;
+
+// UI refs
+const toastEl=document.getElementById('toast');
+const winnerBannerEl=document.getElementById('winnerBanner');
+const topbarEl=document.getElementById('topbar');
+const p1Card=document.getElementById('p1Card');
+const p2Card=document.getElementById('p2Card');
+
+function showToast(text){
+  if(!toastEl) return;
+  toastEl.textContent=text;
+  toastEl.classList.add('show');
+  setTimeout(()=>toastEl.classList.remove('show'),2000);
+}
+
+function countPieces(board){
+  let white=0, black=0;
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+    const p=board?.[y]?.[x];
+    if(!p) continue;
+    if(p.color==='white') white++;
+    if(p.color==='black') black++;
+  }
+  return {white,black};
+}
+
+function seatKeyFromSeat(seat){
+  return seat===1 ? 'p1' : (seat===2 ? 'p2' : null);
+}
+
+function seatNumberFromKey(key){
+  return key==='p1' ? 1 : (key==='p2' ? 2 : null);
+}
+
+function seatKeyForColor(state,color){
+  if(!state?.colors) return null;
+  if(state.colors.p1===color) return 'p1';
+  if(state.colors.p2===color) return 'p2';
+  return null;
+}
+
+function makeMiniLoader(){
+  return `
+    <span class="mini-loader" aria-label="loading">
+      <span class="bar1"></span><span class="bar2"></span><span class="bar3"></span>
+      <span class="bar4"></span><span class="bar5"></span><span class="bar6"></span>
+    </span>
+    <span class="waiting-text">ожидание игрока</span>
+  `;
+}
+
+function renderPlayerCards(state){
+  if(!state || !roomId){
+    topbarEl.style.display='none';
+    return;
+  }
+  topbarEl.style.display='flex';
+
+  const p1=state.profiles?.p1 || {avatar:'🙂', name:''};
+  const p2=state.profiles?.p2 || {avatar:'🙂', name:''};
+  const p1Color=state.colors?.p1 || 'white';
+  const p2Color=state.colors?.p2 || 'black';
+
+  const p1ColorClass = p1Color==='black' ? 'black' : 'white';
+  const p2ColorClass = p2Color==='black' ? 'black' : 'white';
+
+  // Новый формат:
+  // Аватар  Игрок 1
+  //         Имя (если есть)
+  p1Card.innerHTML = `
+    <span class="avatar">${p1.avatar||'🙂'}</span>
+    <span class="player-lines">
+      <span class="title">Игрок 1</span>
+      ${p1.name ? `<span class="name">${escapeHtml(p1.name)}</span>` : ''}
+    </span>
+    <span class="color-box ${p1ColorClass}" title="команда"></span>
+  `;
+
+  if(state.connected?.p2){
+    p2Card.innerHTML = `
+      <span class="color-box ${p2ColorClass}" title="команда"></span>
+      <span class="player-lines" style="text-align:right;">
+        <span class="title">Игрок 2</span>
+        ${p2.name ? `<span class="name">${escapeHtml(p2.name)}</span>` : ''}
+      </span>
+      <span class="avatar">${p2.avatar||'🙂'}</span>
+    `;
+  }else{
+    p2Card.innerHTML = makeMiniLoader();
+  }
+}
+
+function escapeHtml(str){
+  return (str||'').replace(/[&<>"']/g,(c)=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c]));
+}
+
+function setWinnerBanner(text){
+  if(!text){
+    winnerBannerEl.style.display='none';
+    winnerBannerEl.textContent='';
+    return;
+  }
+  winnerBannerEl.textContent=text;
+  winnerBannerEl.style.display='block';
+}
 
 function clearMoveDots(){
   document.querySelectorAll('.move-dot').forEach(el=>el.remove());
@@ -236,6 +427,19 @@ function startPolling(){
     const r=await fetch(`/room/${roomId}/state`);
     const d=await r.json();
 
+    // Если в комнате был rematch (gameId поменялся),
+    // надо пересчитать свой color (на сервере цвета меняются местами).
+    if(typeof d.gameId === 'number' && lastGameId!=null && d.gameId!==lastGameId){
+      await joinRoomById(roomId,{showModal:false, keepProfileConfirmed:true});
+      // reset local UX selection
+      selectedPiece=null;
+      legalMoves=[];
+      clearMoveDots();
+      document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
+      setWinnerBanner(null);
+    }
+    if(typeof d.gameId === 'number') lastGameId=d.gameId;
+
     roomState=d;
 
     const colorBox=document.getElementById('turnColorBox');
@@ -264,41 +468,217 @@ function startPolling(){
       ? computeLegalDestinations(roomState.board, playerColor, selectedPiece, roomState)
       : [];
 
+    // Победа: если у кого-то не осталось ни одной шашки
+    const counts=countPieces(d.board);
+    if(counts.white===0 || counts.black===0){
+      const winnerColor = counts.white===0 ? 'black' : 'white';
+      const winnerSeatKey = seatKeyForColor(d,winnerColor); // 'p1' | 'p2'
+      const winnerSeatNum = seatNumberFromKey(winnerSeatKey);
+      const winnerProfile = winnerSeatKey ? (d.profiles?.[winnerSeatKey] || {name:''}) : {name:''};
+
+      // В заголовке у нас всегда "Игрок 1/2", а имя — опционально.
+      const displayName = (winnerProfile?.name && winnerProfile.name.trim())
+        ? winnerProfile.name.trim()
+        : (winnerSeatNum ? `Игрок ${winnerSeatNum}` : 'Игрок');
+
+      setWinnerBanner(`Победил "${displayName}"`);
+      // Блокируем действия в UI, но доску всё равно отрисовываем
+      legalMoves=[];
+      selectedPiece=null;
+    }else{
+      setWinnerBanner(null);
+    }
+
+    renderPlayerCards(d);
+
+    // enable/disable кнопки
+    document.getElementById('invite').disabled = !roomId;
+    document.getElementById('rematch').disabled = !roomId;
+
     renderBoard(d.board);
   },1000);
+}
+
+function applyBubblyButtonAnimations(){
+  const animateButton = function(e){
+    e.preventDefault();
+    e.target.classList.remove('animate');
+    e.target.classList.add('animate');
+    setTimeout(()=>e.target.classList.remove('animate'),700);
+  };
+  const bubblyButtons=document.getElementsByClassName('bubbly-button');
+  for(let i=0;i<bubblyButtons.length;i++){
+    bubblyButtons[i].addEventListener('click', animateButton, false);
+  }
+}
+
+function showProfileModal(defaultName){
+  const backdrop=document.getElementById('profileModalBackdrop');
+  const nameInput=document.getElementById('profileName');
+  const grid=document.getElementById('avatarGrid');
+  if(!backdrop||!nameInput||!grid) return;
+
+  // уточняем заголовок модалки
+  const titleEl=document.getElementById('profileTitle');
+  if(titleEl) titleEl.textContent = `Имя игрока и аватар (${defaultName})`;
+
+  // имя - загружаем из localStorage, если есть
+  let savedName = '';
+  if(seat){
+    savedName = localStorage.getItem(PROFILE_NAME_KEY(seat)) || '';
+  }
+  nameInput.value = savedName;
+
+  // аватар - загружаем из localStorage или случайный
+  let savedAvatar = '';
+  if(seat){
+    savedAvatar = localStorage.getItem(PROFILE_AVATAR_KEY(seat)) || '';
+  }
+  chosenAvatar = savedAvatar && AVATARS.includes(savedAvatar) ? savedAvatar : AVATARS[Math.floor(Math.random()*AVATARS.length)];
+
+  grid.innerHTML='';
+  for(const a of AVATARS){
+    const el=document.createElement('div');
+    el.className='avatar-choice'+(a===chosenAvatar?' selected':'');
+    el.textContent=a;
+    el.onclick=()=>{
+      chosenAvatar=a;
+      grid.querySelectorAll('.avatar-choice').forEach(x=>x.classList.remove('selected'));
+      el.classList.add('selected');
+    };
+    grid.appendChild(el);
+  }
+
+  backdrop.classList.add('show');
+  setTimeout(()=>nameInput.focus(),0);
+}
+
+async function submitProfile(){
+  if(!roomId || !playerColor) return;
+  const name=(document.getElementById('profileName')?.value||'').trim();
+  const avatar=(chosenAvatar||'').trim();
+
+  // сохраняем отдельно для seat
+  if(seat){
+    localStorage.setItem(PROFILE_NAME_KEY(seat), name);
+    localStorage.setItem(PROFILE_AVATAR_KEY(seat), avatar);
+  }
+
+  const r=await fetch(`/room/${roomId}/profile`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({clientId,name,avatar})
+  });
+  const d=await r.json();
+  if(d?.error){
+    alert(d.error);
+    return;
+  }
+  profileConfirmed=true;
+  document.getElementById('profileModalBackdrop')?.classList.remove('show');
+
+  // Применяем локально сразу, чтобы не ждать polling
+  const sk=seatKeyFromSeat(seat);
+  if(sk && roomState){
+    // Обновляем roomState.profiles
+    if(!roomState.profiles) roomState.profiles = {};
+    roomState.profiles[sk] = d.profile;
+    // Также обновляем connected, если его нет
+    if(!roomState.connected) roomState.connected = {};
+    if(sk === 'p1') roomState.connected.p1 = true;
+    if(sk === 'p2') roomState.connected.p2 = true;
+    renderPlayerCards(roomState);
+  }
+}
+
+function getRoomIdFromUrl(){
+  const u=new URL(location.href);
+  const q=u.searchParams.get('room');
+  return (q||'').trim() || null;
+}
+
+async function joinRoomById(id, opts={}){
+  const {showModal=true, keepProfileConfirmed=false} = opts;
+  const r=await fetch(`/room/${id}/join?clientId=${encodeURIComponent(clientId)}`);
+  const d=await r.json();
+  if(d.error) return {error:d.error};
+  roomId=id;
+  playerColor=d.color;
+  seat=d.seat;
+  profileConfirmed = keepProfileConfirmed ? profileConfirmed : false;
+  document.getElementById('roomIdInput').value=roomId;
+  if(playerColor==='black') boardEl.classList.add('flipped');
+  else boardEl.classList.remove('flipped');
+  document.getElementById('invite').disabled=false;
+  document.getElementById('rematch').disabled=false;
+  if(showModal) showProfileModal(seat===1?'Игрок 1':'Игрок 2');
+  return {ok:true};
 }
 
 document.getElementById('createRoom').onclick=async()=>{
   const r=await fetch('/room/create');
   const d=await r.json();
   roomId=d.roomId;
-  document.getElementById('roomIdDisplay').textContent='Room ID: '+roomId;
   document.getElementById('roomIdInput').value=roomId;
 
-  // создатель комнаты автоматически подключается за белых
-  const jr=await fetch(`/room/${roomId}/join`);
-  const jd=await jr.json();
-  if(jd.error) return; // тихо
-  playerColor=jd.color;
-  if(playerColor==='black') boardEl.classList.add('flipped');
-  else boardEl.classList.remove('flipped');
+  // создатель комнаты автоматически подключается
+  const j=await joinRoomById(roomId,{showModal:true});
+  if(j.error) return;
 };
 
 document.getElementById('joinRoom').onclick=async()=>{
   const id=document.getElementById('roomIdInput').value.trim();
   if(!id) return;
-  const r=await fetch(`/room/${id}/join`);
-  const d=await r.json();
-  if(d.error) return alert(d.error);
-  roomId=id;
-  playerColor=d.color;
-  if(playerColor==='black') boardEl.classList.add('flipped');
-  else boardEl.classList.remove('flipped');
+  const j=await joinRoomById(id,{showModal:true});
+  if(j.error) return alert(j.error);
 };
+
+document.getElementById('invite').onclick=async()=>{
+  if(!roomId) return;
+  const url=`${location.origin}${location.pathname}?room=${encodeURIComponent(roomId)}`;
+  try{
+    await navigator.clipboard.writeText(url);
+    showToast('ссылка скопирована');
+  }catch{
+    // fallback
+    const tmp=document.createElement('textarea');
+    tmp.value=url;
+    document.body.appendChild(tmp);
+    tmp.select();
+    document.execCommand('copy');
+    tmp.remove();
+    showToast('ссылка скопирована');
+  }
+};
+
+document.getElementById('rematch').onclick=async()=>{
+  if(!roomId) return;
+  await fetch(`/room/${roomId}/rematch`,{method:'POST'});
+  // после рематча заново подтверждаем цвет (он поменялся),
+  // но профиль оставляем без повторного окна.
+  await joinRoomById(roomId,{showModal:false, keepProfileConfirmed:true});
+  setWinnerBanner(null);
+
+  // сбрасываем локальный UX-селект/подсветки
+  selectedPiece=null;
+  legalMoves=[];
+  clearMoveDots();
+  document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
+};
+
+document.getElementById('profileOk').onclick=submitProfile;
+
+// Enter в поле имени = OK
+document.getElementById('profileName')?.addEventListener('keydown',(e)=>{
+  if(e.key==='Enter') submitProfile();
+});
 
 boardEl.addEventListener('click',async e=>{
   const cell=e.target.closest('.cell');
   if(!cell||!playerColor) return;
+  if(!profileConfirmed) return; // пока не нажал ОК в модалке
+  // если игра завершена — запрещаем клики
+  if(winnerBannerEl.style.display!=='none') return;
   const x=+cell.dataset.x, y=+cell.dataset.y;
   const piece=cell.querySelector('.piece');
 
@@ -357,6 +737,18 @@ boardEl.addEventListener('click',async e=>{
 
 createBoardUI();
 startPolling();
+
+applyBubblyButtonAnimations();
+
+// Авто-join по ссылке ?room=XXXX
+(async()=>{
+  const fromUrl=getRoomIdFromUrl();
+  if(fromUrl){
+    document.getElementById('roomIdInput').value=fromUrl;
+    const j=await joinRoomById(fromUrl);
+    if(j.error) alert(j.error);
+  }
+})();
 </script>
 </body>
 </html>

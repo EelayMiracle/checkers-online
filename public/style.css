@@ -17,6 +17,138 @@ body {
   justify-content: flex-start;
 }
 
+/* ===== Кнопки: стиль из public/button 1.html (адаптирован под общий UI) ===== */
+.bubbly-button {
+  font-family: "Helvetica", "Arial", sans-serif;
+  display: inline-block;
+  font-size: 1em;
+  padding: 0.8em 1.4em;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #ff0081;
+  color: #fff;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: transform ease-in 0.1s, box-shadow ease-in 0.25s;
+  box-shadow: 0 2px 25px rgba(255, 0, 130, 0.5);
+}
+
+.bubbly-button:focus { outline: 0; }
+
+.bubbly-button:before, .bubbly-button:after {
+  position: absolute;
+  content: "";
+  display: block;
+  width: 140%;
+  height: 100%;
+  left: -20%;
+  z-index: -1000;
+  transition: all ease-in-out 0.5s;
+  background-repeat: no-repeat;
+}
+
+.bubbly-button:before {
+  display: none;
+  top: -75%;
+  background-image:
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, transparent 20%, #ff0081 20%, transparent 30%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, transparent 10%, #ff0081 15%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%);
+  background-size: 10% 10%, 20% 20%, 15% 15%, 20% 20%, 18% 18%, 10% 10%, 15% 15%, 10% 10%, 18% 18%;
+}
+
+.bubbly-button:after {
+  display: none;
+  bottom: -75%;
+  background-image:
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, transparent 10%, #ff0081 15%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%),
+    radial-gradient(circle, #ff0081 20%, transparent 20%);
+  background-size: 15% 15%, 20% 20%, 18% 18%, 20% 20%, 15% 15%, 10% 10%, 20% 20%;
+}
+
+.bubbly-button:active {
+  transform: scale(0.95);
+  background-color: #e60074;
+  box-shadow: 0 2px 25px rgba(255, 0, 130, 0.2);
+}
+
+.bubbly-button.animate:before {
+  display: block;
+  animation: topBubbles ease-in-out 0.75s forwards;
+}
+
+.bubbly-button.animate:after {
+  display: block;
+  animation: bottomBubbles ease-in-out 0.75s forwards;
+}
+
+@keyframes topBubbles {
+  0% {
+    background-position: 5% 90%, 10% 90%, 10% 90%, 15% 90%, 25% 90%, 25% 90%, 40% 90%, 55% 90%, 70% 90%;
+  }
+  50% {
+    background-position: 0% 80%, 0% 20%, 10% 40%, 20% 0%, 30% 30%, 22% 50%, 50% 50%, 65% 20%, 90% 30%;
+  }
+  100% {
+    background-position: 0% 70%, 0% 10%, 10% 30%, 20% -10%, 30% 20%, 22% 40%, 50% 40%, 65% 10%, 90% 20%;
+    background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
+  }
+}
+
+@keyframes bottomBubbles {
+  0% {
+    background-position: 10% -10%, 30% 10%, 55% -10%, 70% -10%, 85% -10%, 70% -10%, 70% 0%;
+  }
+  50% {
+    background-position: 0% 80%, 20% 80%, 45% 60%, 60% 100%, 75% 70%, 95% 60%, 105% 0%;
+  }
+  100% {
+    background-position: 0% 90%, 20% 90%, 45% 70%, 60% 110%, 75% 80%, 95% 70%, 110% 10%;
+    background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
+  }
+}
+
+@keyframes delay {
+  0%, 40%, 100% {
+    transform: scaleY(0.05);
+  }
+  20% {
+    transform: scaleY(1.0);
+  }
+}
+
+/* Сброс старого стиля для <button> (чтобы не конфликтовало) */
+button {
+  font-family: inherit;
+  padding: initial;
+  border-radius: initial;
+  border: none;
+  cursor: pointer;
+  background: none;
+  color: inherit;
+  font-weight: normal;
+  box-shadow: none;
+  transition: none;
+}
+
+button.bubbly-button {
+  padding: 0.8em 1.4em;
+}
+
 /* Панель кнопок в одну строку */
 .controls {
   display: flex;
@@ -27,22 +159,217 @@ body {
   margin-top: 10px;
 }
 
-button {
-  font-family: inherit;
-  padding: 10px 18px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  background: linear-gradient(to bottom, #16A8C7, #0c5a6b);
+.controls .divider {
+  width: 100%;
+  height: 0;
+}
+
+.controls .room-id-inline {
   color: #F1F1FF;
-  font-weight: bold;
-  box-shadow: 1px 1px 3px #232621;
+  font-weight: 700;
+}
+
+.controls .room-id-inline.hidden { display: none; }
+
+.controls .toast {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.controls .toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.controls {
+  position: relative;
+}
+
+/* ===== Верхняя панель над доской ===== */
+.topbar {
+  width: 80vmin;
+  max-width: 720px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #F1F1FF;
+  font-weight: 800;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+}
+
+.player-card.right {
+  margin-left: auto;
+}
+
+.color-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+}
+
+.color-box.white { background: #fff; border: 1px solid #000; }
+.color-box.black { background: #000; border: 1px solid #fff; }
+
+.avatar {
+  font-size: 28px;
+  line-height: 1;
+  background: rgba(255,255,255,0.1);
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.winner-banner {
+  margin-top: 10px;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  text-shadow: 1px 2px 3px rgba(0,0,0,0.7);
+}
+
+/* ===== Loader (адаптация public/loader.html под встраивание) ===== */
+.mini-loader {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+}
+
+.mini-loader span {
+  width: 4px;
+  height: 100%;
+  display: inline-block;
+  animation: delay 0.8s infinite ease-in-out;
+  transform-origin: bottom;
+}
+
+.mini-loader .bar1{ background-color: #754fa0; }
+.mini-loader .bar2{ background-color: #09b7bf; animation-delay: -0.7s; }
+.mini-loader .bar3{ background-color: #90d36b; animation-delay: -0.6s; }
+.mini-loader .bar4{ background-color: #f2d40d; animation-delay: -0.5s; }
+.mini-loader .bar5{ background-color: #fcb12b; animation-delay: -0.4s; }
+.mini-loader .bar6{ background-color: #ed1b72; animation-delay: -0.3s; }
+
+.waiting-text {
+  color: rgba(255,255,255,0.85);
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+.player-lines {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.player-lines .title {
+  font-weight: 900;
+}
+
+.player-lines .name {
+  font-weight: 700;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+/* ===== Модалка профиля ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-backdrop.show { display: flex; }
+
+.modal {
+  width: min(560px, 92vw);
+  background: #111317;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 18px;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+}
+
+.modal h2 { margin: 0 0 12px; font-size: 20px; }
+
+.modal .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.modal label { font-weight: 800; }
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.avatar-choice {
+  background: rgba(255,255,255,0.1);
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 12px;
+  padding: 12px 0;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
   transition: all 0.2s ease;
 }
 
-button:hover {
-  background: linear-gradient(to bottom, #0c5a6b, #16A8C7);
-  transform: translateY(-2px);
+.avatar-choice:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.3);
+}
+
+.avatar-choice.selected {
+  border-color: #ff0081;
+  background: rgba(255,0,129,0.15);
+  box-shadow: 0 0 0 3px rgba(255,0,129,0.5), inset 0 0 10px rgba(255,0,129,0.2);
+  transform: scale(1.05);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 input {
@@ -56,21 +383,26 @@ input {
 #turnDisplay {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 18px;
+  gap: 12px;
+  margin-top: 15px;
+  font-size: 22px;
   font-weight: bold;
   color: #F1F1FF;
-  text-shadow: 1px 1px 2px #000;
+  text-shadow: 1px 1px 3px #000;
+  background: rgba(0,0,0,0.3);
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  padding: 10px 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 #turnColorBox {
-  width: 32px;
-  height: 18px;
-  border-radius: 3px;
-  border: 1px solid #ffffff;
+  width: 40px;
+  height: 24px;
+  border-radius: 5px;
+  border: 2px solid #ffffff;
   background: #ffffff;
-  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+  box-shadow: 0 0 8px rgba(0,0,0,0.8);
 }
 
 /* Доска: светло-жёлтые и чёрные клетки */
@@ -174,4 +506,3 @@ input {
   pointer-events: none;
   box-shadow: 0 0 4px rgba(0,0,0,0.3);
 }
-
