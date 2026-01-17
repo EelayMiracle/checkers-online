@@ -30,7 +30,11 @@
   <span class="turn-label">Ход:</span>
   <span id="turnColorBox"></span>
 </div>
-
+<div class="volume-control">
+  <span style="font-size:20px">🔊</span>
+  <input type="range" id="volumeSlider" min="0" max="100" value="60">
+  <span id="volumeValue">60%</span>
+</div>
 <div id="board"></div>
 
 <!-- Модалка выбора имени и аватара -->
@@ -792,37 +796,43 @@ applyBubblyButtonAnimations();
 })();
 </script>
 	<script>
-// === ЗВУКИ ХОДОВ (ИСПРАВЛЕННАЯ ВЕРСИЯ) ===
+// === ЗВУКИ С НАСТРОЙКОЙ ГРОМКОСТИ ===
 const sounds = {
-  move:    null,
-  capture: null,
-  king:    null
+  move: new Audio('sounds/move.wav'),
+  capture: new Audio('sounds/capture.mp3'),
+  king: new Audio('sounds/king.mp3')
 };
 
-// Ленивая инициализация — создаём объекты только после разблокировки
-function initSounds() {
-  if (sounds.move) return;
-  sounds.move    = new Audio('sounds/move.wav');
-  sounds.capture = new Audio('sounds/capture.mp3');
-  sounds.king    = new Audio('sounds/king.mp3');
+let volume = 0.6; // начальная громкость (60%)
+
+// Устанавливаем громкость всем звукам
+function setVolume(val) {
+  volume = val;
+  Object.values(sounds).forEach(s => s.volume = val);
+  document.getElementById('volumeValue').textContent = Math.round(val * 100) + '%';
 }
 
+// Разблокировка звука
 let soundReady = false;
-function unlockSound() {
+document.addEventListener('click', () => {
   if (soundReady) return;
-  initSounds();
-  // Тихо "трогаем" звуки, чтобы разблокировать
-  sounds.move.volume = 0;
-  sounds.move.play().then(() => { sounds.move.pause(); sounds.move.currentTime = 0; sounds.move.volume = 1; }).catch(() => {});
+  sounds.move.play().catch(() => {});
   soundReady = true;
-}
-document.addEventListener('click', unlockSound, {once: true});
-document.addEventListener('touchstart', unlockSound, {once: true});
+}, {once: true});
+
+// Ползунок
+document.getElementById('volumeSlider').addEventListener('input', (e) => {
+  setVolume(e.target.value / 100);
+});
+
+// При загрузке
+setVolume(0.6); // 60% по умолчанию
 
 function playSound(type) {
   if (!soundReady || !sounds[type]) return;
   const s = sounds[type];
   s.currentTime = 0;
+  s.volume = volume;
   s.play().catch(() => {});
 }
 </script>

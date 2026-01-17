@@ -429,6 +429,44 @@ input {
 #board.flipped .cell {
   transform: rotate(180deg);
 }
+.volume-control {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.6);
+  padding: 8px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 9999;
+  color: white;
+  font-family: sans-serif;
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+#volumeSlider {
+  width: 100px;
+  height: 6px;
+  -webkit-appearance: none;
+  background: #444;
+  border-radius: 3px;
+  outline: none;
+}
+
+#volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ff0081;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(255,0,129,0.6);
+}
+
+
+
 
 /* Шашки: белые и чёрные, как в классике */
 .piece {
