@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Checkers Multiplayer</title>
 <link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="icon.png">
 </head>
 <body>
 
@@ -711,7 +712,47 @@ boardEl.addEventListener('click',async e=>{
 
     // без alert: если ошибка — ничего не меняем
     if(d.error) return;
+         if(d.error) return;
 
+    // === ЗВУКИ — 100% ТОЧНЫЙ ВАРИАНТ ===
+    const fromX = selectedPiece.x;
+    const fromY = selectedPiece.y;
+    const toX = x;
+    const toY = y;
+
+    const oldPiece = roomState?.board?.[fromY]?.[fromX];  // шашка ДО хода
+    const newPiece = d.board?.[toY]?.[toX];               // шашка ПОСЛЕ хода (на новой клетке)
+
+    let hadCapture = false;
+
+    // Было взятие? Исчезла хотя бы одна шашка противника
+    if (roomState?.board && d.board) {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const oldP = roomState.board[y][x];
+          const newP = d.board[y][x];
+          if (oldP && !newP && oldP.color !== playerColor) {
+            hadCapture = true;
+          }
+        }
+      }
+    }
+
+    // Стала ли НАША шашка дамкой именно на этом ходу?
+    const becameKing = newPiece &&
+                       newPiece.color === playerColor &&
+                       newPiece.king &&
+                       oldPiece &&
+                       !oldPiece.king;
+
+    if (becameKing) {
+      playSound('king');
+    } else if (hadCapture) {
+      playSound('capture');
+    } else {
+      playSound('move');
+    }
+    // =========================================
     // успех
     if(d.board) roomState = {...(roomState||{}), board:d.board};
     if(typeof d.turn === 'string') roomState.turn = d.turn;
@@ -749,6 +790,41 @@ applyBubblyButtonAnimations();
     if(j.error) alert(j.error);
   }
 })();
+</script>
+	<script>
+// === ЗВУКИ ХОДОВ (ИСПРАВЛЕННАЯ ВЕРСИЯ) ===
+const sounds = {
+  move:    null,
+  capture: null,
+  king:    null
+};
+
+// Ленивая инициализация — создаём объекты только после разблокировки
+function initSounds() {
+  if (sounds.move) return;
+  sounds.move    = new Audio('sounds/move.wav');
+  sounds.capture = new Audio('sounds/capture.mp3');
+  sounds.king    = new Audio('sounds/king.mp3');
+}
+
+let soundReady = false;
+function unlockSound() {
+  if (soundReady) return;
+  initSounds();
+  // Тихо "трогаем" звуки, чтобы разблокировать
+  sounds.move.volume = 0;
+  sounds.move.play().then(() => { sounds.move.pause(); sounds.move.currentTime = 0; sounds.move.volume = 1; }).catch(() => {});
+  soundReady = true;
+}
+document.addEventListener('click', unlockSound, {once: true});
+document.addEventListener('touchstart', unlockSound, {once: true});
+
+function playSound(type) {
+  if (!soundReady || !sounds[type]) return;
+  const s = sounds[type];
+  s.currentTime = 0;
+  s.play().catch(() => {});
+}
 </script>
 </body>
 </html>
