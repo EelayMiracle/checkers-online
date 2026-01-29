@@ -7,7 +7,10 @@
 <link rel="icon" type="image/png" href="icon.png">
 </head>
 <body>
-
+<nav class="game-switch">
+  <span class="game-switch__label">Шашки</span>
+  <button class="game-switch__btn" id="goToUgolki">Уголки</button>
+</nav>
 <div class="controls">
   <button class="bubbly-button" id="createRoom">Создать комнату</button>
   <button class="bubbly-button" id="rematch" disabled>Рематч</button>
@@ -23,17 +26,19 @@
 
 <div class="topbar" id="topbar" style="display:none;">
   <div class="player-card left" id="p1Card"></div>
+
+  <div id="turnDisplay">
+    <span class="turn-label">Ход:</span>
+    <span id="turnColorBox"></span>
+  </div>
+
   <div class="player-card right" id="p2Card"></div>
 </div>
 
-<div id="turnDisplay">
-  <span class="turn-label">Ход:</span>
-  <span id="turnColorBox"></span>
-</div>
 <div class="volume-control">
   <span style="font-size:20px">🔊</span>
   <input type="range" id="volumeSlider" min="0" max="100" value="60">
-  <span id="volumeValue">60%</span>
+  <span id="volumeValue">50%</span>
 </div>
 <div id="board"></div>
 
@@ -111,6 +116,7 @@ const AVATARS=["😃","😊","😈","👽","🤖","👻","😼","🦊","🐯","�
 let chosenAvatar=null;
 let profileConfirmed=false;
 let lastGameId=null;
+let lastPlayedMoveId=0;  // для синхронизации звуков противника
 
 // UI refs
 const toastEl=document.getElementById('toast');
@@ -432,18 +438,27 @@ function startPolling(){
     const r=await fetch(`/room/${roomId}/state`);
     const d=await r.json();
 
-    // Если в комнате был rematch (gameId поменялся),
-    // надо пересчитать свой color (на сервере цвета меняются местами).
+    // Если в комнате был rematch (gameId поменялся)
     if(typeof d.gameId === 'number' && lastGameId!=null && d.gameId!==lastGameId){
       await joinRoomById(roomId,{showModal:false, keepProfileConfirmed:true});
-      // reset local UX selection
       selectedPiece=null;
       legalMoves=[];
       clearMoveDots();
       document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
       setWinnerBanner(null);
+      lastPlayedMoveId=0; // сброс при ремапче
     }
     if(typeof d.gameId === 'number') lastGameId=d.gameId;
+
+    // === НОВОЕ: воспроизведение звука противника ===
+    if(d.lastMoveId && d.lastMoveId > lastPlayedMoveId){
+      // Проигрываем звук только если это ход ПРОТИВНИКА
+      if(d.lastMoveBy && d.lastMoveBy !== playerColor && d.lastMoveSound){
+        playSound(d.lastMoveSound);
+      }
+      lastPlayedMoveId = d.lastMoveId;
+    }
+    // ================================================
 
     roomState=d;
 
@@ -458,13 +473,11 @@ function startPolling(){
       }
     }
 
-    // подсветку видит только тот, кто ходит
     if(!playerColor || roomState.turn!==playerColor){
       selectedPiece=null;
       legalMoves=[];
     }
 
-    // если нужно продолжать серию взятий — автоселектим нужную шашку
     if(playerColor && roomState.mustContinue && roomState.mustContinue.player===playerColor){
       selectedPiece={x:roomState.mustContinue.x,y:roomState.mustContinue.y};
     }
@@ -473,21 +486,18 @@ function startPolling(){
       ? computeLegalDestinations(roomState.board, playerColor, selectedPiece, roomState)
       : [];
 
-    // Победа: если у кого-то не осталось ни одной шашки
     const counts=countPieces(d.board);
     if(counts.white===0 || counts.black===0){
       const winnerColor = counts.white===0 ? 'black' : 'white';
-      const winnerSeatKey = seatKeyForColor(d,winnerColor); // 'p1' | 'p2'
+      const winnerSeatKey = seatKeyForColor(d,winnerColor);
       const winnerSeatNum = seatNumberFromKey(winnerSeatKey);
       const winnerProfile = winnerSeatKey ? (d.profiles?.[winnerSeatKey] || {name:''}) : {name:''};
 
-      // В заголовке у нас всегда "Игрок 1/2", а имя — опционально.
       const displayName = (winnerProfile?.name && winnerProfile.name.trim())
         ? winnerProfile.name.trim()
         : (winnerSeatNum ? `Игрок ${winnerSeatNum}` : 'Игрок');
 
       setWinnerBanner(`Победил "${displayName}"`);
-      // Блокируем действия в UI, но доску всё равно отрисовываем
       legalMoves=[];
       selectedPiece=null;
     }else{
@@ -496,7 +506,6 @@ function startPolling(){
 
     renderPlayerCards(d);
 
-    // enable/disable кнопки
     document.getElementById('invite').disabled = !roomId;
     document.getElementById('rematch').disabled = !roomId;
 
@@ -620,6 +629,10 @@ async function joinRoomById(id, opts={}){
   return {ok:true};
 }
 
+document.getElementById('goToUgolki').onclick = () => {
+  // поменяй 'ugolki.html' на имя файла, где лежит этот клиент уголков
+  window.location.href = 'ugolki.html';
+};
 document.getElementById('createRoom').onclick=async()=>{
   const r=await fetch('/room/create');
   const d=await r.json();
@@ -681,16 +694,13 @@ document.getElementById('profileName')?.addEventListener('keydown',(e)=>{
 boardEl.addEventListener('click',async e=>{
   const cell=e.target.closest('.cell');
   if(!cell||!playerColor) return;
-  if(!profileConfirmed) return; // пока не нажал ОК в модалке
-  // если игра завершена — запрещаем клики
+  if(!profileConfirmed) return;
   if(winnerBannerEl.style.display!=='none') return;
   const x=+cell.dataset.x, y=+cell.dataset.y;
   const piece=cell.querySelector('.piece');
 
   if(piece && piece.classList.contains(playerColor)){
-    // нельзя выбирать шашки, если сейчас не ваш ход
     if(!roomState || roomState.turn!==playerColor) return;
-    // если надо продолжать взятие — выбрать можно только нужную шашку
     if(roomState.mustContinue && (x!==roomState.mustContinue.x || y!==roomState.mustContinue.y)) return;
 
     document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
@@ -703,7 +713,6 @@ boardEl.addEventListener('click',async e=>{
   }
 
   if(selectedPiece){
-    // тихий UX: если клик не по разрешённой клетке — просто ничего не делаем
     const isLegal=legalMoves.some(m=>m.x===x&&m.y===y);
     if(!isLegal) return;
 
@@ -714,56 +723,22 @@ boardEl.addEventListener('click',async e=>{
     });
     const d=await r.json();
 
-    // без alert: если ошибка — ничего не меняем
     if(d.error) return;
-         if(d.error) return;
 
-    // === ЗВУКИ — 100% ТОЧНЫЙ ВАРИАНТ ===
-    const fromX = selectedPiece.x;
-    const fromY = selectedPiece.y;
-    const toX = x;
-    const toY = y;
-
-    const oldPiece = roomState?.board?.[fromY]?.[fromX];  // шашка ДО хода
-    const newPiece = d.board?.[toY]?.[toX];               // шашка ПОСЛЕ хода (на новой клетке)
-
-    let hadCapture = false;
-
-    // Было взятие? Исчезла хотя бы одна шашка противника
-    if (roomState?.board && d.board) {
-      for (let y = 0; y < 8; y++) {
-        for (let x = 0; x < 8; x++) {
-          const oldP = roomState.board[y][x];
-          const newP = d.board[y][x];
-          if (oldP && !newP && oldP.color !== playerColor) {
-            hadCapture = true;
-          }
-        }
-      }
+    // === ЗВУКИ: играем локально и запоминаем moveId ===
+    if(d.lastMoveSound){
+      playSound(d.lastMoveSound);
     }
-
-    // Стала ли НАША шашка дамкой именно на этом ходу?
-    const becameKing = newPiece &&
-                       newPiece.color === playerColor &&
-                       newPiece.king &&
-                       oldPiece &&
-                       !oldPiece.king;
-
-    if (becameKing) {
-      playSound('king');
-    } else if (hadCapture) {
-      playSound('capture');
-    } else {
-      playSound('move');
+    if(d.lastMoveId){
+      lastPlayedMoveId = d.lastMoveId;  // чтобы при polling не играть повторно
     }
-    // =========================================
-    // успех
+    // ==================================================
+
     if(d.board) roomState = {...(roomState||{}), board:d.board};
     if(typeof d.turn === 'string') roomState.turn = d.turn;
     if('mustContinue' in d) roomState.mustContinue = d.mustContinue;
 
     if(d.mustContinue){
-      // серия взятий продолжается
       if(roomState) roomState.mustContinue=d.mustContinue;
       selectedPiece={x:d.mustContinue.x,y:d.mustContinue.y};
       legalMoves=computeLegalDestinations(d.board,playerColor,selectedPiece,roomState);
@@ -771,7 +746,6 @@ boardEl.addEventListener('click',async e=>{
       return;
     }
 
-    // ход завершён
     selectedPiece=null;
     legalMoves=[];
     clearMoveDots();
@@ -798,7 +772,7 @@ applyBubblyButtonAnimations();
 	<script>
 // === ЗВУКИ С НАСТРОЙКОЙ ГРОМКОСТИ ===
 const sounds = {
-  move: new Audio('sounds/move.wav'),
+  move: new Audio('sounds/woosh.mp3'),
   capture: new Audio('sounds/capture.mp3'),
   king: new Audio('sounds/king.mp3')
 };

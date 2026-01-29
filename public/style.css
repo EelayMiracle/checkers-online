@@ -137,6 +137,43 @@ body {
     transform: scaleY(1.0);
   }
 }
+/* Стиль кнопки переключения игр */
+ .game-switch {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0 20px;
+    }
+    .game-switch__btn {
+      padding: 6px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: rgba(0,0,0,0.4);
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .game-switch__btn:hover {
+      background: rgba(255,255,255,0.12);
+      transform: translateY(-1px);
+    }
+    .game-switch__label {
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    /* твои существующие стили ниже */
+    /* Дополнительные стили только для уголков */
+    .cell.target-white {
+      box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.6);
+    }
+
 
 /* Сброс старого стиля для <button> (чтобы не конфликтовало) */
 button {
@@ -157,14 +194,17 @@ button.bubbly-button {
 }
 
 
-/* ===== Верхняя панель над доской ===== */
+/* ===== Верхняя панель над доской (ШАШКИ) ===== */
 .topbar {
   width: 80vmin;
   max-width: 720px;
   margin-top: 12px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* центрируем содержимое через flex + flex:1 у карточек */
+  justify-content: center;
+  column-gap: 16px;
+
   color: #F1F1FF;
   font-weight: 800;
   text-shadow: 1px 1px 2px #000;
@@ -175,10 +215,12 @@ button.bubbly-button {
   align-items: center;
   gap: 10px;
   min-height: 36px;
+  flex: 1 1 0;          /* каждая карточка занимает свою половину */
 }
 
 .player-card.right {
-  margin-left: auto;
+  margin-left: 0;        /* больше не нужно auto */
+  justify-content: flex-end;
 }
 
 .color-box {
@@ -357,23 +399,24 @@ input {
   flex-shrink: 1;
 }
 
-/* Табло хода: "Ход:" и прямоугольник цвета */
+/* Табло хода (центральная плашка между игроками) */
 #turnDisplay {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 15px;
+
+  margin-top: 0;          /* было 15px — убираем, чтобы встало в линию */
   font-size: 22px;
   font-weight: bold;
   color: #F1F1FF;
   text-shadow: 1px 1px 3px #000;
+
   background: rgba(0,0,0,0.3);
   border: 2px solid rgba(255,255,255,0.2);
   border-radius: 10px;
   padding: 10px 20px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
-
 #turnColorBox {
   width: 40px;
   height: 24px;
