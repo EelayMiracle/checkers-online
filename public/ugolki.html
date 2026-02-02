@@ -17,43 +17,6 @@
     .piece.jumping {
       box-shadow: 0 0 20px 5px rgba(0, 255, 100, 0.7) !important;
     }
-    .timer-bar {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255,255,255,0.1);
-      padding: 8px 15px;
-      border-radius: 10px;
-      font-size: 1rem;
-      color: #fff;
-      margin-left: 15px;
-    }
-    .timer-bar.warning {
-      background: rgba(255, 100, 100, 0.4);
-      animation: pulse 0.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-    .end-turn-btn {
-      margin-left: 10px;
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: none;
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-      color: #fff;
-      font-size: 1rem;
-      cursor: pointer;
-      animation: glowBtn 1s infinite;
-    }
-    .end-turn-btn:hover {
-      transform: translateY(-2px);
-    }
-    @keyframes glowBtn {
-      0%, 100% { box-shadow: 0 0 10px rgba(245, 87, 108, 0.5); }
-      50% { box-shadow: 0 0 20px rgba(245, 87, 108, 0.8); }
-    }
     .rules-box {
       max-width: 420px;
       margin: 20px auto 0;
@@ -105,11 +68,14 @@
       margin-top: 0;
       width: auto;
       max-width: none;
+      min-width: 0; /* Позволяет сжиматься */
+      flex-shrink: 0; /* Не сжимается меньше содержимого */
 
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
+      flex-wrap: nowrap; /* Запрет переноса */
 
       padding: 8px 14px;
       border-radius: 10px;
@@ -117,6 +83,24 @@
       border: 2px solid rgba(255,255,255,0.2);
       box-shadow: 0 4px 12px rgba(0,0,0,0.4);
       font-size: 1rem;
+      white-space: nowrap; /* Запрет переноса текста */
+    }
+
+    /* Убедимся, что карточки игроков не выходят за пределы */
+    body.ugolki-page .player-card {
+      min-width: 0; /* Позволяет сжиматься */
+      overflow: hidden; /* Скрываем выходящий контент */
+    }
+    body.ugolki-page .player-lines {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    body.ugolki-page .player-lines .name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
   </style>
 </head>
@@ -130,8 +114,11 @@
   <button class="bubbly-button" id="rematch" disabled>Рематч</button>
   <button class="bubbly-button" id="invite" disabled>Пригласить друга</button>
 
-  <input id="roomIdInput" placeholder="Код комнаты">
-  <button class="bubbly-button" id="joinRoom">Подключиться</button>
+  <div class="volume-control-inline">
+    <span style="font-size:20px">🔊</span>
+    <input type="range" id="volumeSlider" min="0" max="100" value="50">
+    <span id="volumeValue">50%</span>
+  </div>
 
   <div id="toast" class="toast">ссылка скопирована</div>
 </div>
@@ -145,17 +132,9 @@
   <div class="turn-panel" id="turnDisplay">
     <span class="turn-label">Ход:</span>
     <span id="turnColorBox"></span>
-    <span class="timer-bar" id="timerBar">⏱️ --</span>
-    <button class="end-turn-btn" id="endTurnBtn" style="display:none;">✓ Завершить ход</button>
   </div>
 
   <div class="player-card right" id="p2Card"></div>
-</div>
-
-<div class="volume-control">
-  <span style="font-size:20px">🔊</span>
-  <input type="range" id="volumeSlider" min="0" max="100" value="60">
-  <span id="volumeValue">50%</span>
 </div>
 
 <div id="board"></div>
@@ -198,8 +177,6 @@ const winnerBannerEl = document.getElementById('winnerBanner');
 const topbarEl = document.getElementById('topbar');
 const p1Card = document.getElementById('p1Card');
 const p2Card = document.getElementById('p2Card');
-const timerBarEl = document.getElementById('timerBar');
-const endTurnBtn = document.getElementById('endTurnBtn');
 
 // Client ID (отдельный от шашек)
 const CLIENT_ID_KEY = 'ugolki_client_id_v1';
@@ -228,8 +205,14 @@ function showToast(text) {
 
 function escapeHtml(str) {
   return (str || '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;'
   }[c]));
+}
+
+function truncateName(name) {
+  if (!name) return '';
+  if (name.length <= 10) return name;
+  return name.substring(0, 10) + '...';
 }
 
 function seatKeyFromSeat(s) { return s === 1 ? 'p1' : (s === 2 ? 'p2' : null); }
@@ -265,11 +248,14 @@ function renderPlayerCards(state) {
   const p1ColorClass = p1Color === 'black' ? 'black' : 'white';
   const p2ColorClass = p2Color === 'black' ? 'black' : 'white';
 
+  const p1Name = p1.name ? escapeHtml(truncateName(p1.name)) : '';
+  const p2Name = p2.name ? escapeHtml(truncateName(p2.name)) : '';
+  
   p1Card.innerHTML = `
     <span class="avatar">${p1.avatar || '🙂'}</span>
     <span class="player-lines">
       <span class="title">Игрок 1</span>
-      ${p1.name ? `<span class="name">${escapeHtml(p1.name)}</span>` : ''}
+      ${p1Name ? `<span class="name">${p1Name}</span>` : ''}
     </span>
     <span class="color-box ${p1ColorClass}" title="команда"></span>
   `;
@@ -279,7 +265,7 @@ function renderPlayerCards(state) {
       <span class="color-box ${p2ColorClass}" title="команда"></span>
       <span class="player-lines" style="text-align:right;">
         <span class="title">Игрок 2</span>
-        ${p2.name ? `<span class="name">${escapeHtml(p2.name)}</span>` : ''}
+        ${p2Name ? `<span class="name">${p2Name}</span>` : ''}
       </span>
       <span class="avatar">${p2.avatar || '🙂'}</span>
     `;
@@ -426,38 +412,7 @@ function renderBoard(board) {
   renderMoveDots(legalMoves);
 }
 
-function updateTimer() {
-  if (!roomState || !roomState.jumpingFrom || roomState.turn !== playerColor) {
-    timerBarEl.textContent = '⏱️ --';
-    timerBarEl.classList.remove('warning');
-    endTurnBtn.style.display = 'none';
-    return;
-  }
-
-  const elapsed = Date.now() - roomState.lastActionAt;
-  const remaining = Math.max(0, 5000 - elapsed);
-  const seconds = (remaining / 1000).toFixed(1);
-
-  timerBarEl.textContent = `⏱️ ${seconds}с`;
-
-  if (remaining < 2000) {
-    timerBarEl.classList.add('warning');
-  } else {
-    timerBarEl.classList.remove('warning');
-  }
-
-  // Показываем кнопку завершения хода
-  if (roomState.turn === playerColor && roomState.jumpingFrom) {
-    endTurnBtn.style.display = 'inline-block';
-  } else {
-    endTurnBtn.style.display = 'none';
-  }
-}
-
 function startPolling() {
-  // Таймер обновления каждые 100мс для плавности
-  setInterval(updateTimer, 100);
-
   setInterval(async () => {
     if (!roomId) return;
     const r = await fetch(`/ugolki/room/${roomId}/state`);
@@ -614,7 +569,6 @@ async function joinRoomById(id, opts = {}) {
   playerColor = d.color;
   seat = d.seat;
   profileConfirmed = keepProfileConfirmed ? profileConfirmed : false;
-  document.getElementById('roomIdInput').value = roomId;
   if (playerColor === 'black') boardEl.classList.add('flipped');
   else boardEl.classList.remove('flipped');
   document.getElementById('invite').disabled = false;
@@ -643,7 +597,6 @@ document.getElementById('createRoom').onclick = async () => {
   const r = await fetch('/ugolki/room/create');
   const d = await r.json();
   roomId = d.roomId;
-  document.getElementById('roomIdInput').value = roomId;
   const j = await joinRoomById(roomId, { showModal: true });
   if (j.error) return;
 };
@@ -651,12 +604,6 @@ document.getElementById('createRoom').onclick = async () => {
 	document.getElementById('goToCheckers').onclick = () => {
   // поменяй 'index.html' на реальное имя страницы шашек
   window.location.href = 'index.html';
-};
-document.getElementById('joinRoom').onclick = async () => {
-  const id = document.getElementById('roomIdInput').value.trim();
-  if (!id) return;
-  const j = await joinRoomById(id, { showModal: true });
-  if (j.error) return alert(j.error);
 };
 
 document.getElementById('invite').onclick = async () => {
@@ -690,23 +637,6 @@ document.getElementById('profileOk').onclick = submitProfile;
 document.getElementById('profileName')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') submitProfile();
 });
-
-// Завершить ход вручную
-endTurnBtn.onclick = async () => {
-  if (!roomId || !playerColor) return;
-  const r = await fetch(`/ugolki/room/${roomId}/endTurn`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ player: playerColor })
-  });
-  const d = await r.json();
-  if (d.error) {
-    showToast(d.error);
-    return;
-  }
-  selectedPiece = null;
-  legalMoves = [];
-};
 
 // Board click
 boardEl.addEventListener('click', async e => {
@@ -791,7 +721,6 @@ applyBubblyButtonAnimations();
 (async () => {
   const fromUrl = getRoomIdFromUrl();
   if (fromUrl) {
-    document.getElementById('roomIdInput').value = fromUrl;
     const j = await joinRoomById(fromUrl);
     if (j.error) alert(j.error);
   }
@@ -806,7 +735,7 @@ const sounds = {
   king: new Audio('sounds/king.mp3')
 };
 
-let volume = 0.6;
+let volume = 0.5;
 
 function setVolume(val) {
   volume = val;
@@ -825,7 +754,7 @@ document.getElementById('volumeSlider').addEventListener('input', (e) => {
   setVolume(e.target.value / 100);
 });
 
-setVolume(0.6);
+setVolume(0.5);
 
 function playSound(type) {
   if (!soundReady || !sounds[type]) return;

@@ -16,8 +16,11 @@
   <button class="bubbly-button" id="rematch" disabled>Рематч</button>
   <button class="bubbly-button" id="invite" disabled>Пригласить друга</button>
 
-  <input id="roomIdInput" placeholder="Код комнаты">
-  <button class="bubbly-button" id="joinRoom">Подключиться</button>
+  <div class="volume-control-inline">
+    <span style="font-size:20px">🔊</span>
+    <input type="range" id="volumeSlider" min="0" max="100" value="50">
+    <span id="volumeValue">50%</span>
+  </div>
 
   <div id="toast" class="toast">ссылка скопирована</div>
 </div>
@@ -35,11 +38,6 @@
   <div class="player-card right" id="p2Card"></div>
 </div>
 
-<div class="volume-control">
-  <span style="font-size:20px">🔊</span>
-  <input type="range" id="volumeSlider" min="0" max="100" value="60">
-  <span id="volumeValue">50%</span>
-</div>
 <div id="board"></div>
 
 <!-- Модалка выбора имени и аватара -->
@@ -620,7 +618,6 @@ async function joinRoomById(id, opts={}){
   playerColor=d.color;
   seat=d.seat;
   profileConfirmed = keepProfileConfirmed ? profileConfirmed : false;
-  document.getElementById('roomIdInput').value=roomId;
   if(playerColor==='black') boardEl.classList.add('flipped');
   else boardEl.classList.remove('flipped');
   document.getElementById('invite').disabled=false;
@@ -637,18 +634,10 @@ document.getElementById('createRoom').onclick=async()=>{
   const r=await fetch('/room/create');
   const d=await r.json();
   roomId=d.roomId;
-  document.getElementById('roomIdInput').value=roomId;
 
   // создатель комнаты автоматически подключается
   const j=await joinRoomById(roomId,{showModal:true});
   if(j.error) return;
-};
-
-document.getElementById('joinRoom').onclick=async()=>{
-  const id=document.getElementById('roomIdInput').value.trim();
-  if(!id) return;
-  const j=await joinRoomById(id,{showModal:true});
-  if(j.error) return alert(j.error);
 };
 
 document.getElementById('invite').onclick=async()=>{
@@ -763,7 +752,6 @@ applyBubblyButtonAnimations();
 (async()=>{
   const fromUrl=getRoomIdFromUrl();
   if(fromUrl){
-    document.getElementById('roomIdInput').value=fromUrl;
     const j=await joinRoomById(fromUrl);
     if(j.error) alert(j.error);
   }
@@ -777,7 +765,7 @@ const sounds = {
   king: new Audio('sounds/king.mp3')
 };
 
-let volume = 0.6; // начальная громкость (60%)
+let volume = 0.5; // начальная громкость (50%)
 
 // Устанавливаем громкость всем звукам
 function setVolume(val) {
@@ -800,7 +788,7 @@ document.getElementById('volumeSlider').addEventListener('input', (e) => {
 });
 
 // При загрузке
-setVolume(0.6); // 60% по умолчанию
+setVolume(0.5); // 50% по умолчанию
 
 function playSound(type) {
   if (!soundReady || !sounds[type]) return;

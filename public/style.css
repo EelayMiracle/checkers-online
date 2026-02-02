@@ -576,9 +576,7 @@ input {
   .topbar {
     width: 95vmin;
     max-width: 95vmin;
-    margin-top: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
+    margin-top: 8px;    
     gap: 10px;
   }
 
@@ -737,5 +735,60 @@ input {
   @media (max-width: 380px) {
     .bubbly-button { font-size: 0.78rem; padding: 0.5em 0.6em; }
     #roomIdInput { font-size: 0.88rem; }
+  }
+}
+
+/* Встроенный регулятор громкости в панели кнопок */
+.volume-control-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.4);
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: white;
+  font-family: sans-serif;
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.volume-control-inline #volumeSlider {
+  width: 80px;
+  height: 6px;
+  -webkit-appearance: none;
+  background: #444;
+  border-radius: 3px;
+  outline: none;
+}
+
+.volume-control-inline #volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff0081;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(255,0,129,0.6);
+}
+
+.volume-control-inline #volumeValue {
+  font-size: 14px;
+  min-width: 35px;
+  text-align: center;
+}
+
+/* Адаптация для мобильных */
+@media (max-width: 768px) {
+  .volume-control-inline {
+    padding: 5px 10px;
+    gap: 6px;
+  }
+  .volume-control-inline #volumeSlider {
+    width: 60px;
+  }
+  .volume-control-inline #volumeValue {
+    font-size: 12px;
+    min-width: 30px;
   }
 }
