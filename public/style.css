@@ -8,6 +8,7 @@ html, body {
   font-size: 16px;
   color: #333333;
   background-color: #3A3042;
+  overflow-x: hidden;
 }
 
 body {
@@ -216,6 +217,7 @@ button.bubbly-button {
   gap: 10px;
   min-height: 36px;
   flex: 1 1 0;          /* каждая карточка занимает свою половину */
+  min-width: 0;
 }
 
 .player-card.right {
@@ -574,8 +576,8 @@ input {
 
 
   .topbar {
-    width: 95vmin;
-    max-width: 95vmin;
+    width: 90vmin;
+    max-width: 90vmin;
     margin-top: 8px;    
     gap: 10px;
   }
@@ -584,6 +586,7 @@ input {
     flex: 1;
     min-width: 45%;
     justify-content: center;
+    min-width: 0;
   }
 
   .player-card.right {
@@ -609,8 +612,6 @@ input {
     font-size: 18px;
     padding: 8px 16px;
     margin-top: 10px;
-    width: 95vmin;
-    max-width: 95vmin;
     box-sizing: border-box;
   }
 
@@ -620,8 +621,8 @@ input {
   }
 
   #board {
-    width: 95vmin;
-    height: 95vmin;
+    width: 90vmin;
+    height: 90vmin;
     margin-top: 10px;
   }
 
@@ -719,8 +720,8 @@ input {
 /* Мобильные */
 @media (max-width: 768px) {
   .controls {
-    width: 95vmin;
-    max-width: 95vmin;
+    width: 90vmin;
+    max-width: 90vmin;
     gap: 6px;
     padding: 6px 8px;
     margin-top: 8px;
@@ -749,7 +750,8 @@ input {
   color: white;
   font-family: sans-serif;
   border: 1px solid rgba(255,255,255,0.2);
-  flex-shrink: 0;
+  flex: 1 1 120px;
+  max-width: 160px;
   min-width: 0;
 }
 

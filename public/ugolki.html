@@ -1,114 +1,25 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Уголки Multiplayer</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon" type="image/png" href="icon.png">
-  <style>
-    /* Дополнительные стили только для уголков */
-    .cell.target-white {
-      box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.6);
-    }
-    .cell.target-black {
-      box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.5);
-    }
-    .piece.jumping {
-      box-shadow: 0 0 20px 5px rgba(0, 255, 100, 0.7) !important;
-    }
-    .rules-box {
-      max-width: 420px;
-      margin: 20px auto 0;
-      padding: 15px 20px;
-      background: rgba(255,255,255,0.07);
-      border-radius: 12px;
-      font-size: 0.9rem;
-      line-height: 1.6;
-      color: #ccc;
-    }
-    .rules-box h3 {
-      margin-bottom: 10px;
-      color: #ffd700;
-      font-size: 1.1rem;
-    }
-    .rules-box ul {
-      margin-left: 20px;
-    }
-    .rules-box li {
-      margin-bottom: 5px;
-    }
-	      /* ===== УГОЛКИ: верхняя панель в 3 колонки, табло строго по центру ===== */
-
-    /* .topbar только на странице уголков — делаем сеткой 1fr auto 1fr */
-    body.ugolki-page .topbar {
-      display: grid;                     /* перебиваем flex из style.css */
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      /* ширину берем как в общем стиле, чтобы совпадала с доской */
-      width: 80vmin;
-      max-width: 720px;
-      margin: 12px auto 0;               /* по центру */
-    }
-
-    /* Левый и правый игроки — у краёв своих колонок */
-    body.ugolki-page .player-card.left {
-      justify-self: start;
-    }
-
-    body.ugolki-page .player-card.right {
-      justify-self: end;
-      text-align: right;
-      margin-left: 0;                    /* перебиваем margin-left:auto из style.css */
-    }
-
-    /* Табло хода по центру между игроками */
-    body.ugolki-page #turnDisplay {
-      /* перебиваем глобальный #turnDisplay из style.css */
-      margin-top: 0;
-      width: auto;
-      max-width: none;
-      min-width: 0; /* Позволяет сжиматься */
-      flex-shrink: 0; /* Не сжимается меньше содержимого */
-
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      flex-wrap: nowrap; /* Запрет переноса */
-
-      padding: 8px 14px;
-      border-radius: 10px;
-      background: rgba(0,0,0,0.3);
-      border: 2px solid rgba(255,255,255,0.2);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      font-size: 1rem;
-      white-space: nowrap; /* Запрет переноса текста */
-    }
-
-    /* Убедимся, что карточки игроков не выходят за пределы */
-    body.ugolki-page .player-card {
-      min-width: 0; /* Позволяет сжиматься */
-      overflow: hidden; /* Скрываем выходящий контент */
-    }
-    body.ugolki-page .player-lines {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    body.ugolki-page .player-lines .name {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Уголки Multiplayer</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  /* Только две строчки нужны именно для Уголков */
+  .cell.target-white { box-shadow: inset 0 0 0 3.5px rgba(255,255,255,0.75); }
+  .cell.target-black { box-shadow: inset 0 0 0 3.5px rgba(0,0,0,0.65); }
+  .piece.jumping { box-shadow: 0 0 20px 6px rgba(0,255,100,0.9) !important; }
+</style>
 </head>
-<body class="ugolki-page">
+<body>
+
 <nav class="game-switch">
   <button class="game-switch__btn" id="goToCheckers">Шашки</button>
   <span class="game-switch__label">Уголки</span>
 </nav>
+
 <div class="controls">
   <button class="bubbly-button" id="createRoom">Создать комнату</button>
   <button class="bubbly-button" id="rematch" disabled>Рематч</button>
@@ -125,11 +36,11 @@
 
 <div id="winnerBanner" class="winner-banner" style="display:none;"></div>
 
+<!-- ТОЧНО ТАКАЯ ЖЕ ШАПКА КАК В ШАШКАХ — НИКАКИХ turn-panel и прочей ерунды -->
 <div class="topbar" id="topbar" style="display:none;">
   <div class="player-card left" id="p1Card"></div>
 
-  <!-- ТАБЛО ХОДА ПОСЕРЕДИНЕ -->
-  <div class="turn-panel" id="turnDisplay">
+  <div id="turnDisplay">
     <span class="turn-label">Ход:</span>
     <span id="turnColorBox"></span>
   </div>
@@ -139,23 +50,20 @@
 
 <div id="board"></div>
 
-<!-- Модалка выбора имени и аватара -->
+<!-- Модалка профиля — 100% как в шашках -->
 <div class="modal-backdrop" id="profileModalBackdrop">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
     <h2 id="profileTitle">Имя игрока и аватар</h2>
-
     <div class="row">
       <label for="profileName">Имя:</label>
-      <input id="profileName" placeholder="Ваш ник" />
+      <input id="profileName" placeholder="Ваш ник" maxlength="15" />
     </div>
-
     <div class="row" style="align-items:flex-start;">
       <div>
         <div style="font-weight:800; margin-bottom:6px;">Аватар:</div>
         <div class="avatar-grid" id="avatarGrid"></div>
       </div>
     </div>
-
     <div class="modal-actions">
       <button class="bubbly-button" id="profileOk">ОК</button>
     </div>
@@ -163,607 +71,286 @@
 </div>
 
 <script>
-// ==================== УГОЛКИ ====================
-let roomId = null, playerColor = null, selectedPiece = null;
-let seat = null;
-let roomState = null;
-let legalMoves = [];
-let lastPlayedMoveId = 0;
-let lastGameId = null;
-
-const boardEl = document.getElementById('board');
-const toastEl = document.getElementById('toast');
-const winnerBannerEl = document.getElementById('winnerBanner');
-const topbarEl = document.getElementById('topbar');
-const p1Card = document.getElementById('p1Card');
-const p2Card = document.getElementById('p2Card');
-
-// Client ID (отдельный от шашек)
-const CLIENT_ID_KEY = 'ugolki_client_id_v1';
-function getOrCreateClientId() {
-  let v = sessionStorage.getItem(CLIENT_ID_KEY);
-  if (v) return v;
-  v = crypto?.randomUUID ? crypto.randomUUID() : (Date.now() + "_" + Math.random().toString(16).slice(2));
-  sessionStorage.setItem(CLIENT_ID_KEY, v);
+// ======================== УГОЛКИ — ВСЁ ОСТАЛЬНОЕ 100% ИЗ ШАШЕК ========================
+let roomId=null, playerColor=null, selectedPiece=null;
+let seat=null;
+let roomState=null;
+let legalMoves=[];
+const boardEl=document.getElementById('board');
+const CLIENT_ID_KEY='ugolki_client_id_v2';
+function getOrCreateClientId(){
+  let v=sessionStorage.getItem(CLIENT_ID_KEY);
+  if(v) return v;
+  v = crypto?.randomUUID?.() || Date.now()+"_"+Math.random().toString(36).slice(2);
+  sessionStorage.setItem(CLIENT_ID_KEY,v);
   return v;
 }
-const clientId = getOrCreateClientId();
+const clientId=getOrCreateClientId();
 
-// Профиль
-const PROFILE_NAME_KEY = (s) => `ugolki_profile_name_v1_seat_${s}`;
-const PROFILE_AVATAR_KEY = (s) => `ugolki_profile_avatar_v1_seat_${s}`;
-const AVATARS = ["😃", "😊", "😈", "👽", "🤖", "👻", "😼", "🦊", "🐯", "🦁", "🐉", "🐥", "🦋"];
-let chosenAvatar = null;
-let profileConfirmed = false;
+const PROFILE_NAME_KEY=s=>`ugolki_profile_name_v2_seat_${s}`;
+const PROFILE_AVATAR_KEY=s=>`ugolki_profile_avatar_v2_seat_${s}`;
+const AVATARS=["😃","😊","😈","👽","🤖","👻","😼","🦊","🐯","🦁","🐉","🐥","🦋"];
+let chosenAvatar=null;
+let profileConfirmed=false;
+let lastGameId=null;
+let lastPlayedMoveId=0;
 
-function showToast(text) {
-  if (!toastEl) return;
-  toastEl.textContent = text;
-  toastEl.classList.add('show');
-  setTimeout(() => toastEl.classList.remove('show'), 2000);
+const toastEl=document.getElementById('toast');
+const winnerBannerEl=document.getElementById('winnerBanner');
+const topbarEl=document.getElementById('topbar');
+const p1Card=document.getElementById('p1Card');
+const p2Card=document.getElementById('p2Card');
+
+function showToast(t){toastEl.textContent=t;toastEl.classList.add('show');setTimeout(()=>toastEl.classList.remove('show'),2000);}
+function escapeHtml(s){return(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function makeMiniLoader(){
+  return `<span class="mini-loader"><span class="bar1"></span><span class="bar2"></span><span class="bar3"></span><span class="bar4"></span><span class="bar5"></span><span class="bar6"></span></span><span class="waiting-text">ожидание игрока</span>`;
 }
 
-function escapeHtml(str) {
-  return (str || '').replace(/[&<>"']/g, (c) => ({
-    '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;'
-  }[c]));
+function renderPlayerCards(state){
+  if(!state||!roomId){topbarEl.style.display='none';return;}
+  topbarEl.style.display='flex';
+  const p1=state.profiles?.p1||{avatar:'🙂',name:''};
+  const p2=state.profiles?.p2||{avatar:'🙂',name:''};
+  const p1Color=state.colors?.p1||'white';
+  const p2Color=state.colors?.p2||'black';
+  const p1Class=p1Color==='black'?'black':'white';
+  const p2Class=p2Color==='black'?'black':'white';
+
+  p1Card.innerHTML=`
+    <span class="avatar">${p1.avatar||'🙂'}</span>
+    <span class="player-lines">
+      <span class="title">Игрок 1</span>
+      ${p1.name?`<span class="name">${escapeHtml(p1.name)}</span>`:''}
+    </span>
+    <span class="color-box ${p1Class}" title="команда"></span>
+  `;
+
+  p2Card.innerHTML=state.connected?.p2?`
+    <span class="color-box ${p2Class}" title="команда"></span>
+    <span class="player-lines" style="text-align:right;">
+      <span class="title">Игрок 2</span>
+      ${p2.name?`<span class="name">${escapeHtml(p2.name)}</span>`:''}
+    </span>
+    <span class="avatar">${p2.avatar||'🙂'}</span>
+  `:makeMiniLoader();
 }
 
-function truncateName(name) {
-  if (!name) return '';
-  if (name.length <= 10) return name;
-  return name.substring(0, 10) + '...';
+function setWinnerBanner(text){
+  winnerBannerEl.style.display=text?'block':'none';
+  winnerBannerEl.textContent=text||'';
 }
 
-function seatKeyFromSeat(s) { return s === 1 ? 'p1' : (s === 2 ? 'p2' : null); }
-function seatNumberFromKey(k) { return k === 'p1' ? 1 : (k === 'p2' ? 2 : null); }
-function seatKeyForColor(state, color) {
-  if (!state?.colors) return null;
-  if (state.colors.p1 === color) return 'p1';
-  if (state.colors.p2 === color) return 'p2';
+function clearMoveDots(){document.querySelectorAll('.move-dot').forEach(d=>d.remove());}
+function renderMoveDots(moves){
+  clearMoveDots();
+  moves.forEach(m=>{ 
+    const cell=boardEl.querySelector(`.cell[data-x="${m.x}"][data-y="${m.y}"]`);
+    if(cell){ const dot=document.createElement('div'); dot.className='move-dot'; cell.appendChild(dot); }
+  });
+}
+
+// === ЛОГИКА УГОЛКОВ ===
+function getTargetCells(color){
+  const cells=[];
+  if(color==='white') for(let y=0;y<3;y++)for(let x=0;x<3;x++) cells.push({x,y});
+  else for(let y=5;y<8;y++)for(let x=5;x<8;x++) cells.push({x,y});
+  return cells;
+}
+
+function checkWin(board){
+  const whiteTarget=getTargetCells('white');
+  const blackTarget=getTargetCells('black');
+  const whiteOk=whiteTarget.every(c=>board[c.y][c.x]?.color==='white');
+  const blackOk=blackTarget.every(c=>board[c.y][c.x]?.color==='black');
+  if(whiteOk) return 'white';
+  if(blackOk) return 'black';
   return null;
 }
 
-function makeMiniLoader() {
-  return `
-    <span class="mini-loader" aria-label="loading">
-      <span class="bar1"></span><span class="bar2"></span><span class="bar3"></span>
-      <span class="bar4"></span><span class="bar5"></span><span class="bar6"></span>
-    </span>
-    <span class="waiting-text">ожидание игрока</span>
-  `;
+function getMoves(board, pos){
+  const piece=board[pos.y][pos.x];
+  if(!piece) return [];
+  const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+  const moves=[];
+  for(const [dx,dy] of dirs){
+    const sx=pos.x+dx, sy=pos.y+dy;
+    if(sx>=0&&sx<8&&sy>=0&&sy<8 && !board[sy][sx]) moves.push({x:sx,y:sy}); // шаг
+    const jx=pos.x+2*dx, jy=pos.y+2*dy;
+    if(jx>=0&&jx<8&&jy>=0&&jy<8 && board[sy][sx] && !board[jy][jx]) moves.push({x:jx,y:jy}); // прыжок
+  }
+  return moves;
 }
 
-function renderPlayerCards(state) {
-  if (!state || !roomId) {
-    topbarEl.style.display = 'none';
-    return;
-  }
-  topbarEl.style.display = 'flex';
+function computeLegalDestinations(board, color, selected, state){
+  if(state.turn!==color || state.winner) return [];
+  const piece=board[selected.y][selected.x];
+  if(!piece || piece.color!==color) return [];
+  if(state.jumpingFrom && (selected.x!==state.jumpingFrom.x || selected.y!==state.jumpingFrom.y)) return [];
+  return getMoves(board, selected);
+}
 
-  const p1 = state.profiles?.p1 || { avatar: '🙂', name: '' };
-  const p2 = state.profiles?.p2 || { avatar: '🙂', name: '' };
-  const p1Color = state.colors?.p1 || 'white';
-  const p2Color = state.colors?.p2 || 'black';
-  const p1ColorClass = p1Color === 'black' ? 'black' : 'white';
-  const p2ColorClass = p2Color === 'black' ? 'black' : 'white';
-
-  const p1Name = p1.name ? escapeHtml(truncateName(p1.name)) : '';
-  const p2Name = p2.name ? escapeHtml(truncateName(p2.name)) : '';
-  
-  p1Card.innerHTML = `
-    <span class="avatar">${p1.avatar || '🙂'}</span>
-    <span class="player-lines">
-      <span class="title">Игрок 1</span>
-      ${p1Name ? `<span class="name">${p1Name}</span>` : ''}
-    </span>
-    <span class="color-box ${p1ColorClass}" title="команда"></span>
-  `;
-
-  if (state.connected?.p2) {
-    p2Card.innerHTML = `
-      <span class="color-box ${p2ColorClass}" title="команда"></span>
-      <span class="player-lines" style="text-align:right;">
-        <span class="title">Игрок 2</span>
-        ${p2Name ? `<span class="name">${p2Name}</span>` : ''}
-      </span>
-      <span class="avatar">${p2.avatar || '🙂'}</span>
-    `;
-  } else {
-    p2Card.innerHTML = makeMiniLoader();
+function createBoardUI(){
+  boardEl.innerHTML='';
+  const whiteT=getTargetCells('white');
+  const blackT=getTargetCells('black');
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+    const cell=document.createElement('div');
+    cell.className='cell '+((x+y)%2===0?'white':'black');
+    cell.dataset.x=x; cell.dataset.y=y;
+    if(whiteT.some(p=>p.x===x&&p.y===y)) cell.classList.add('target-white');
+    if(blackT.some(p=>p.x===x&&p.y===y)) cell.classList.add('target-black');
+    boardEl.appendChild(cell);
   }
 }
 
-function setWinnerBanner(text) {
-  if (!text) {
-    winnerBannerEl.style.display = 'none';
-    winnerBannerEl.textContent = '';
-    return;
-  }
-  winnerBannerEl.textContent = text;
-  winnerBannerEl.style.display = 'block';
-}
-
-function clearMoveDots() {
-  document.querySelectorAll('.move-dot').forEach(el => el.remove());
-}
-
-function renderMoveDots(destinations) {
-  clearMoveDots();
-  for (const { x, y } of destinations) {
-    const cell = boardEl.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
-    if (!cell) continue;
-    const dot = document.createElement('div');
-    dot.className = 'move-dot';
-    cell.appendChild(dot);
-  }
-}
-
-// Целевые зоны
-function getTargetZone(color) {
-  const zone = [];
-  if (color === 'white') {
-    // Белые должны занять левый верхний угол
-    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) zone.push({ x, y });
-  } else {
-    // Чёрные должны занять правый нижний угол
-    for (let y = 5; y < 8; y++) for (let x = 5; x < 8; x++) zone.push({ x, y });
-  }
-  return zone;
-}
-
-// Вычисление возможных ходов
-function getUgolkiMoves(board, pos) {
-  const piece = board?.[pos.y]?.[pos.x];
-  if (!piece) return { steps: [], jumps: [] };
-
-  const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-  const inBounds = (x, y) => x >= 0 && x < 8 && y >= 0 && y < 8;
-  const steps = [];
-  const jumps = [];
-
-  for (const [dx, dy] of directions) {
-    const nx = pos.x + dx;
-    const ny = pos.y + dy;
-    if (!inBounds(nx, ny)) continue;
-
-    if (!board[ny][nx]) {
-      steps.push({ x: nx, y: ny });
-    } else {
-      const jx = pos.x + 2 * dx;
-      const jy = pos.y + 2 * dy;
-      if (inBounds(jx, jy) && !board[jy][jx]) {
-        jumps.push({ x: jx, y: jy });
-      }
-    }
-  }
-
-  return { steps, jumps };
-}
-
-function computeLegalDestinations(board, playerColor, selectedPiece, roomState) {
-  if (!roomState || !selectedPiece) return [];
-  if (roomState.turn !== playerColor) return [];
-  if (roomState.winner) return [];
-
-  const piece = board?.[selectedPiece.y]?.[selectedPiece.x];
-  if (!piece || piece.color !== playerColor) return [];
-
-  // Если в процессе серии прыжков — можно только этой шашкой и только прыжки
-  if (roomState.jumpingFrom) {
-    if (selectedPiece.x !== roomState.jumpingFrom.x || selectedPiece.y !== roomState.jumpingFrom.y) {
-      return [];
-    }
-    const { jumps } = getUgolkiMoves(board, selectedPiece);
-    return jumps;
-  }
-
-  const { steps, jumps } = getUgolkiMoves(board, selectedPiece);
-  return [...steps, ...jumps];
-}
-
-function createBoardUI() {
-  boardEl.innerHTML = '';
-  const whiteTarget = getTargetZone('white');
-  const blackTarget = getTargetZone('black');
-
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const c = document.createElement('div');
-      // Все клетки одного цвета (как шахматная доска, но для уголков можно использовать чередование)
-      c.className = 'cell ' + ((x + y) % 2 === 0 ? 'white' : 'black');
-      c.dataset.x = x;
-      c.dataset.y = y;
-
-      // Подсветка целевых зон
-      if (whiteTarget.some(t => t.x === x && t.y === y)) {
-        c.classList.add('target-white');
-      }
-      if (blackTarget.some(t => t.x === x && t.y === y)) {
-        c.classList.add('target-black');
-      }
-
-      boardEl.appendChild(c);
-    }
-  }
-}
-
-function renderBoard(board) {
+function renderBoard(board){
   createBoardUI();
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const p = board?.[y]?.[x];
-      if (p) {
-        const cell = boardEl.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
-        const el = document.createElement('div');
-        el.className = 'piece ' + p.color;
-        
-        if (selectedPiece && selectedPiece.x === x && selectedPiece.y === y) {
-          el.classList.add('selected');
-        }
-        // Подсветка шашки в процессе прыжков
-        if (roomState?.jumpingFrom && roomState.jumpingFrom.x === x && roomState.jumpingFrom.y === y) {
-          el.classList.add('jumping');
-        }
-        cell.appendChild(el);
-      }
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+    if(board[y][x]){
+      const cell=boardEl.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+      const p=document.createElement('div');
+      p.className='piece '+board[y][x].color;
+      if(selectedPiece?.x===x && selectedPiece?.y===y) p.classList.add('selected');
+      if(roomState?.jumpingFrom?.x===x && roomState?.jumpingFrom?.y===y) p.classList.add('jumping');
+      cell.appendChild(p);
     }
   }
   renderMoveDots(legalMoves);
 }
 
-function startPolling() {
-  setInterval(async () => {
-    if (!roomId) return;
-    const r = await fetch(`/ugolki/room/${roomId}/state`);
-    const d = await r.json();
+function startPolling(){
+  setInterval(async()=>{
+    if(!roomId) return;
+    const r=await fetch(`/ugolki/room/${roomId}/state`);
+    const d=await r.json();
 
-    // Rematch
-    if (typeof d.gameId === 'number' && lastGameId != null && d.gameId !== lastGameId) {
-      await joinRoomById(roomId, { showModal: false, keepProfileConfirmed: true });
-      selectedPiece = null;
-      legalMoves = [];
-      clearMoveDots();
-      setWinnerBanner(null);
-      lastPlayedMoveId = 0;
+    if(d.gameId!==undefined && lastGameId!==null && d.gameId!==lastGameId){
+      await joinRoomById(roomId,{showModal:false,keepProfileConfirmed:true});
+      selectedPiece=null; legalMoves=[]; clearMoveDots(); setWinnerBanner(); lastPlayedMoveId=0;
     }
-    if (typeof d.gameId === 'number') lastGameId = d.gameId;
+    lastGameId=d.gameId;
 
-    // Звуки противника
-    if (d.lastMoveId && d.lastMoveId > lastPlayedMoveId) {
-      if (d.lastMoveBy && d.lastMoveBy !== playerColor && d.lastMoveSound) {
-        playSound(d.lastMoveSound);
-      }
-      lastPlayedMoveId = d.lastMoveId;
-    }
+    if(d.lastMoveId > lastPlayedMoveId && d.lastMoveBy!==playerColor && d.lastMoveSound) playSound(d.lastMoveSound);
+    lastPlayedMoveId=d.lastMoveId;
 
-    roomState = d;
+    roomState=d;
 
-    // Индикатор хода
-    const colorBox = document.getElementById('turnColorBox');
-    if (colorBox) {
-      if (roomState.turn === 'white') {
-        colorBox.style.backgroundColor = '#ffffff';
-        colorBox.style.border = '1px solid #000000';
-      } else {
-        colorBox.style.backgroundColor = '#000000';
-        colorBox.style.border = '1px solid #ffffff';
-      }
+    document.getElementById('turnColorBox').style.cssText = d.turn==='white' 
+      ? 'background:#fff;border:1px solid #000' 
+      : 'background:#000;border:1px solid #fff';
+
+    if(!playerColor || d.turn!==playerColor){ selectedPiece=null; legalMoves=[]; }
+
+    if(d.jumpingFrom && d.turn===playerColor){
+      selectedPiece={x:d.jumpingFrom.x,y:d.jumpingFrom.y};
     }
 
-    // Сброс выделения если не наш ход
-    if (!playerColor || roomState.turn !== playerColor) {
-      selectedPiece = null;
-      legalMoves = [];
-    }
+    legalMoves = selectedPiece ? computeLegalDestinations(d.board,playerColor,selectedPiece,d) : [];
 
-    // Автовыбор шашки при серии прыжков
-    if (playerColor && roomState.jumpingFrom && roomState.turn === playerColor) {
-      selectedPiece = { x: roomState.jumpingFrom.x, y: roomState.jumpingFrom.y };
-    }
-
-    legalMoves = (playerColor && selectedPiece)
-      ? computeLegalDestinations(roomState.board, playerColor, selectedPiece, roomState)
-      : [];
-
-    // Победа
-    if (roomState.winner) {
-      const winnerSeatKey = seatKeyForColor(d, roomState.winner);
-      const winnerSeatNum = seatNumberFromKey(winnerSeatKey);
-      const winnerProfile = winnerSeatKey ? (d.profiles?.[winnerSeatKey] || { name: '' }) : { name: '' };
-      const displayName = (winnerProfile?.name && winnerProfile.name.trim())
-        ? winnerProfile.name.trim()
-        : (winnerSeatNum ? `Игрок ${winnerSeatNum}` : 'Игрок');
-      setWinnerBanner(`🏆 Победил "${displayName}"`);
-      legalMoves = [];
-      selectedPiece = null;
-    } else {
-      setWinnerBanner(null);
-    }
+    const winner=checkWin(d.board);
+    if(winner){
+      const name=(d.profiles?.[winner==='white'?'p1':'p2']?.name||'').trim()||`Игрок ${winner==='white'?1:2}`;
+      setWinnerBanner(`Победил ${name}!`);
+    }else setWinnerBanner();
 
     renderPlayerCards(d);
-    document.getElementById('invite').disabled = !roomId;
-    document.getElementById('rematch').disabled = !roomId;
+    document.getElementById('invite').disabled=!roomId;
+    document.getElementById('rematch').disabled=!roomId;
     renderBoard(d.board);
-  }, 500);
+  },700);
 }
 
-// Profile modal
-function showProfileModal(defaultName) {
-  const backdrop = document.getElementById('profileModalBackdrop');
-  const nameInput = document.getElementById('profileName');
-  const grid = document.getElementById('avatarGrid');
-  if (!backdrop || !nameInput || !grid) return;
-
-  const titleEl = document.getElementById('profileTitle');
-  if (titleEl) titleEl.textContent = `Имя игрока и аватар (${defaultName})`;
-
-  let savedName = seat ? localStorage.getItem(PROFILE_NAME_KEY(seat)) || '' : '';
-  nameInput.value = savedName;
-
-  let savedAvatar = seat ? localStorage.getItem(PROFILE_AVATAR_KEY(seat)) || '' : '';
-  chosenAvatar = savedAvatar && AVATARS.includes(savedAvatar) ? savedAvatar : AVATARS[Math.floor(Math.random() * AVATARS.length)];
-
-  grid.innerHTML = '';
-  for (const a of AVATARS) {
-    const el = document.createElement('div');
-    el.className = 'avatar-choice' + (a === chosenAvatar ? ' selected' : '');
-    el.textContent = a;
-    el.onclick = () => {
-      chosenAvatar = a;
-      grid.querySelectorAll('.avatar-choice').forEach(x => x.classList.remove('selected'));
-      el.classList.add('selected');
-    };
-    grid.appendChild(el);
-  }
-
-  backdrop.classList.add('show');
-  setTimeout(() => nameInput.focus(), 0);
+async function joinRoomById(id,{showModal=true,keepProfileConfirmed=false}={}){
+  const r=await fetch(`/ugolki/room/${id}/join?clientId=${clientId}`);
+  const d=await r.json();
+  if(d.error){alert(d.error);return;}
+  roomId=id; playerColor=d.color; seat=d.seat; profileConfirmed=keepProfileConfirmed||false;
+  boardEl.classList.toggle('flipped',playerColor==='black');
+  document.getElementById('invite').disabled=false;
+  document.getElementById('rematch').disabled=false;
+  if(showModal) showProfileModal(seat===1?'Игрок 1':'Игрок 2');
 }
 
-async function submitProfile() {
-  if (!roomId || !playerColor) return;
-  const name = (document.getElementById('profileName')?.value || '').trim();
-  const avatar = (chosenAvatar || '').trim();
-
-  if (seat) {
-    localStorage.setItem(PROFILE_NAME_KEY(seat), name);
-    localStorage.setItem(PROFILE_AVATAR_KEY(seat), avatar);
-  }
-
-  const r = await fetch(`/ugolki/room/${roomId}/profile`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, name, avatar })
-  });
-  const d = await r.json();
-  if (d?.error) {
-    alert(d.error);
-    return;
-  }
-  profileConfirmed = true;
-  document.getElementById('profileModalBackdrop')?.classList.remove('show');
-
-  const sk = seatKeyFromSeat(seat);
-  if (sk && roomState) {
-    if (!roomState.profiles) roomState.profiles = {};
-    roomState.profiles[sk] = d.profile;
-    if (!roomState.connected) roomState.connected = {};
-    if (sk === 'p1') roomState.connected.p1 = true;
-    if (sk === 'p2') roomState.connected.p2 = true;
-    renderPlayerCards(roomState);
-  }
+function showProfileModal(title){
+  document.getElementById('profileTitle').textContent=`Имя игрока и аватар (${title})`;
+  const name=localStorage.getItem(PROFILE_NAME_KEY(seat))||'';
+  document.getElementById('profileName').value=name;
+  chosenAvatar=localStorage.getItem(PROFILE_AVATAR_KEY(seat))||AVATARS[Math.floor(Math.random()*AVATARS.length)];
+  const grid=document.getElementById('avatarGrid'); grid.innerHTML='';
+  AVATARS.forEach(a=>{const el=document.createElement('div');el.className='avatar-choice'+(a===chosenAvatar?' selected':'');el.textContent=a;el.onclick=()=>{chosenAvatar=a;grid.querySelectorAll('.avatar-choice').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');};grid.appendChild(el);});
+  document.getElementById('profileModalBackdrop').classList.add('show');
 }
 
-function getRoomIdFromUrl() {
-  const u = new URL(location.href);
-  return (u.searchParams.get('room') || '').trim() || null;
-}
-
-async function joinRoomById(id, opts = {}) {
-  const { showModal = true, keepProfileConfirmed = false } = opts;
-  const r = await fetch(`/ugolki/room/${id}/join?clientId=${encodeURIComponent(clientId)}`);
-  const d = await r.json();
-  if (d.error) return { error: d.error };
-  roomId = id;
-  playerColor = d.color;
-  seat = d.seat;
-  profileConfirmed = keepProfileConfirmed ? profileConfirmed : false;
-  if (playerColor === 'black') boardEl.classList.add('flipped');
-  else boardEl.classList.remove('flipped');
-  document.getElementById('invite').disabled = false;
-  document.getElementById('rematch').disabled = false;
-  if (showModal) showProfileModal(seat === 1 ? 'Игрок 1' : 'Игрок 2');
-  return { ok: true };
-}
-
-// Анимация кнопок
-function applyBubblyButtonAnimations() {
-  const animateButton = function(e) {
-    e.preventDefault();
-    e.target.classList.remove('animate');
-    e.target.classList.add('animate');
-    setTimeout(() => e.target.classList.remove('animate'), 700);
-  };
-  const bubblyButtons = document.getElementsByClassName('bubbly-button');
-  for (let i = 0; i < bubblyButtons.length; i++) {
-    bubblyButtons[i].addEventListener('click', animateButton, false);
-  }
-}
-
-	
-// Event handlers
-document.getElementById('createRoom').onclick = async () => {
-  const r = await fetch('/ugolki/room/create');
-  const d = await r.json();
-  roomId = d.roomId;
-  const j = await joinRoomById(roomId, { showModal: true });
-  if (j.error) return;
+document.getElementById('profileOk').onclick=async()=>{
+  const name=document.getElementById('profileName').value.trim();
+  const avatar=chosenAvatar;
+  localStorage.setItem(PROFILE_NAME_KEY(seat),name);
+  localStorage.setItem(PROFILE_AVATAR_KEY(seat),avatar);
+  await fetch(`/ugolki/room/${roomId}/profile`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId,name,avatar})});
+  profileConfirmed=true;
+  document.getElementById('profileModalBackdrop').classList.remove('show');
 };
 
-	document.getElementById('goToCheckers').onclick = () => {
-  // поменяй 'index.html' на реальное имя страницы шашек
-  window.location.href = 'index.html';
-};
+document.getElementById('createRoom').onclick=async()=>{const r=await fetch('/ugolki/room/create');const d=await r.json();roomId=d.roomId;await joinRoomById(roomId,{showModal:true});};
+document.getElementById('goToCheckers').onclick=()=>{location.href='index.html';};
+document.getElementById('invite').onclick=()=>{navigator.clipboard?.writeText?.(`${location.origin}${location.pathname}?room=${roomId}`).then(()=>showToast('ссылка скопирована'))};
+document.getElementById('rematch').onclick=async()=>{await fetch(`/ugolki/room/${roomId}/rematch`,{method:'POST'});await joinRoomById(roomId,{showModal:false,keepProfileConfirmed:true});setWinnerBanner();selectedPiece=null;legalMoves=[];};
 
-document.getElementById('invite').onclick = async () => {
-  if (!roomId) return;
-  const url = `${location.origin}/ugolki.html?room=${encodeURIComponent(roomId)}`;
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast('ссылка скопирована');
-  } catch {
-    const tmp = document.createElement('textarea');
-    tmp.value = url;
-    document.body.appendChild(tmp);
-    tmp.select();
-    document.execCommand('copy');
-    tmp.remove();
-    showToast('ссылка скопирована');
-  }
-};
+boardEl.onclick=async e=>{
+  const cell=e.target.closest('.cell');
+  if(!cell||!playerColor||!profileConfirmed||!roomState||roomState.winner) return;
+  const x=+cell.dataset.x, y=+cell.dataset.y;
+  const piece=cell.querySelector('.piece');
 
-document.getElementById('rematch').onclick = async () => {
-  if (!roomId) return;
-  await fetch(`/ugolki/room/${roomId}/rematch`, { method: 'POST' });
-  await joinRoomById(roomId, { showModal: false, keepProfileConfirmed: true });
-  setWinnerBanner(null);
-  selectedPiece = null;
-  legalMoves = [];
-  clearMoveDots();
-};
-
-document.getElementById('profileOk').onclick = submitProfile;
-document.getElementById('profileName')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') submitProfile();
-});
-
-// Board click
-boardEl.addEventListener('click', async e => {
-  const cell = e.target.closest('.cell');
-  if (!cell || !playerColor) return;
-  if (!profileConfirmed) return;
-  if (roomState?.winner) return;
-
-  const x = +cell.dataset.x, y = +cell.dataset.y;
-  const piece = cell.querySelector('.piece');
-
-  // Выбор своей шашки
-  if (piece && piece.classList.contains(playerColor)) {
-    if (!roomState || roomState.turn !== playerColor) return;
-
-    // Если в процессе серии прыжков — можно выбрать только ту шашку
-    if (roomState.jumpingFrom) {
-      if (x !== roomState.jumpingFrom.x || y !== roomState.jumpingFrom.y) return;
-    }
-
-    document.querySelectorAll('.piece.selected').forEach(p => p.classList.remove('selected'));
+  if(piece && piece.classList.contains(playerColor)){
+    if(roomState.turn!==playerColor) return;
+    if(roomState.jumpingFrom && (x!==roomState.jumpingFrom.x || y!==roomState.jumpingFrom.y)) return;
+    document.querySelectorAll('.piece.selected').forEach(p=>p.classList.remove('selected'));
     piece.classList.add('selected');
-    selectedPiece = { x, y };
-
-    legalMoves = computeLegalDestinations(roomState.board, playerColor, selectedPiece, roomState);
+    selectedPiece={x,y};
+    legalMoves=computeLegalDestinations(roomState.board,playerColor,selectedPiece,roomState);
     renderMoveDots(legalMoves);
     return;
   }
 
-  // Ход
-  if (selectedPiece) {
-    const isLegal = legalMoves.some(m => m.x === x && m.y === y);
-    if (!isLegal) return;
+  if(selectedPiece && legalMoves.some(m=>m.x===x&&m.y===y)){
+    const res=await fetch(`/ugolki/room/${roomId}/move`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:selectedPiece,to:{x,y},player:playerColor})});
+    const d=await res.json();
+    if(d.error) return showToast(d.error);
+    if(d.lastMoveSound) playSound(d.lastMoveSound);
+    if(d.lastMoveId) lastPlayedMoveId=d.lastMoveId;
 
-    const r = await fetch(`/ugolki/room/${roomId}/move`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: selectedPiece, to: { x, y }, player: playerColor })
-    });
-    const d = await r.json();
-
-    if (d.error) {
-      showToast(d.error);
-      return;
-    }
-
-    // Звук
-    if (d.lastMoveSound) {
-      playSound(d.lastMoveSound);
-    }
-    if (d.lastMoveId) {
-      lastPlayedMoveId = d.lastMoveId;
-    }
-
-    // Обновляем состояние
-    if (d.board) roomState = { ...(roomState || {}), board: d.board };
-    if (typeof d.turn === 'string') roomState.turn = d.turn;
-    roomState.jumpingFrom = d.jumpingFrom;
-    roomState.lastActionAt = Date.now();
-
-    // Если можно продолжить прыжки
-    if (d.jumpingFrom) {
-      selectedPiece = { x: d.jumpingFrom.x, y: d.jumpingFrom.y };
-      legalMoves = computeLegalDestinations(d.board, playerColor, selectedPiece, roomState);
+    if(d.jumpingFrom){
+      selectedPiece={x:d.jumpingFrom.x,y:d.jumpingFrom.y};
+      legalMoves=computeLegalDestinations(d.board,playerColor,selectedPiece,d);
       renderBoard(d.board);
-      return;
+    }else{
+      selectedPiece=null; legalMoves=[]; clearMoveDots();
+      renderBoard(d.board);
     }
-
-    // Ход окончен
-    selectedPiece = null;
-    legalMoves = [];
-    clearMoveDots();
-    if (d.board) renderBoard(d.board);
   }
-});
+};
+
+function applyBubblyButtonAnimations(){
+  document.querySelectorAll('.bubbly-button').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();b.classList.add('animate');setTimeout(()=>b.classList.remove('animate'),700);}));
+}
 
 createBoardUI();
 startPolling();
 applyBubblyButtonAnimations();
 
-// Auto-join by URL
-(async () => {
-  const fromUrl = getRoomIdFromUrl();
-  if (fromUrl) {
-    const j = await joinRoomById(fromUrl);
-    if (j.error) alert(j.error);
-  }
-})();
-</script>
+(async()=>{ const room=getRoomIdFromUrl(); if(room) await joinRoomById(room); })();
+function getRoomIdFromUrl(){ const p=new URL(location.href).searchParams.get('room'); return p||null; }
 
-<script>
-// === ЗВУКИ ===
-const sounds = {
-  move: new Audio('sounds/woosh.mp3'),
-  capture: new Audio('sounds/woosh.mp3'),
-  king: new Audio('sounds/king.mp3')
-};
-
-let volume = 0.5;
-
-function setVolume(val) {
-  volume = val;
-  Object.values(sounds).forEach(s => s.volume = val);
-  document.getElementById('volumeValue').textContent = Math.round(val * 100) + '%';
-}
-
-let soundReady = false;
-document.addEventListener('click', () => {
-  if (soundReady) return;
-  sounds.move.play().catch(() => {});
-  soundReady = true;
-}, { once: true });
-
-document.getElementById('volumeSlider').addEventListener('input', (e) => {
-  setVolume(e.target.value / 100);
-});
-
+const sounds={move:new Audio('sounds/woosh.mp3'),capture:new Audio('sounds/woosh.mp3')};
+let volume=0.5;
+document.getElementById('volumeSlider').oninput=e=>setVolume(e.target.value/100);
+document.addEventListener('click',()=>{sounds.move.play().catch(()=>{});},{once:true});
+function setVolume(v){volume=v;Object.values(sounds).forEach(s=>s.volume=v);document.getElementById('volumeValue').textContent=Math.round(v*100)+'%';}
+function playSound(t){if(sounds[t]){sounds[t].currentTime=0;sounds[t].play().catch(()=>{});}}
 setVolume(0.5);
-
-function playSound(type) {
-  if (!soundReady || !sounds[type]) return;
-  const s = sounds[type];
-  s.currentTime = 0;
-  s.volume = volume;
-  s.play().catch(() => {});
-}
 </script>
-
 </body>
 </html>
