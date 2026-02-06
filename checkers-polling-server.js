@@ -395,7 +395,7 @@ function checkUgolkiTimeout(room) {
   const now = Date.now();
   const elapsed = now - room.lastActionAt;
   
-  if (elapsed >= 5000) {
+  if (elapsed >= 3000) {
     const prevPlayer = room.turn;
     room.jumpingFrom = null;
     room.turn = room.turn === 'white' ? 'black' : 'white';
@@ -611,6 +611,460 @@ app.post('/ugolki/room/:id/rematch', (req, res) => {
   room.lastMoveId = 0;
   room.lastMoveSound = null;
   room.lastMoveBy = null;
+
+  res.json({ ok: true, gameId: room.gameId });
+});
+// =====================================================
+// ================== МОРСКОЙ БОЙ =====================
+// =====================================================
+
+const battleshipRooms = {};
+
+const SHIP_SIZES = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]; // 1x4, 2x3, 3x2, 4x1
+
+function createEmptyField() {
+  return Array(10).fill(null).map(() => Array(10).fill(null));
+}
+
+function createEmptyShots() {
+  return Array(10).fill(null).map(() => Array(10).fill(false));
+}
+
+// Проверка можно ли разместить корабль
+function canPlaceShip(field, x, y, size, horizontal) {
+  for (let i = 0; i < size; i++) {
+    const cx = horizontal ? x + i : x;
+    const cy = horizontal ? y : y + i;
+    
+    if (cx < 0 || cx >= 10 || cy < 0 || cy >= 10) return false;
+    
+    // Проверяем клетку и все соседние
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+          if (field[ny][nx] !== null) return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+// Разместить корабль на поле
+function placeShip(field, shipId, x, y, size, horizontal) {
+  const cells = [];
+  for (let i = 0; i < size; i++) {
+    const cx = horizontal ? x + i : x;
+    const cy = horizontal ? y : y + i;
+    field[cy][cx] = { shipId };
+    cells.push({ x: cx, y: cy });
+  }
+  return cells;
+}
+
+// Случайная расстановка
+function randomPlacement() {
+  const field = createEmptyField();
+  const ships = [];
+  
+  for (let i = 0; i < SHIP_SIZES.length; i++) {
+    const size = SHIP_SIZES[i];
+    let placed = false;
+    let attempts = 0;
+    
+    while (!placed && attempts < 1000) {
+      const horizontal = Math.random() < 0.5;
+      const x = Math.floor(Math.random() * (horizontal ? 10 - size + 1 : 10));
+      const y = Math.floor(Math.random() * (horizontal ? 10 : 10 - size + 1));
+      
+      if (canPlaceShip(field, x, y, size, horizontal)) {
+        const cells = placeShip(field, i, x, y, size, horizontal);
+        ships.push({ id: i, size, x, y, horizontal, cells, hits: 0 });
+        placed = true;
+      }
+      attempts++;
+    }
+    
+    if (!placed) {
+      // Не удалось разместить - начинаем заново
+      return randomPlacement();
+    }
+  }
+  
+  return { field, ships };
+}
+
+// Проверка что все корабли расставлены корректно
+function validatePlacement(ships) {
+  if (!ships || ships.length !== 10) return false;
+  
+  const expectedSizes = [...SHIP_SIZES].sort((a, b) => b - a);
+  const actualSizes = ships.map(s => s.size).sort((a, b) => b - a);
+  
+  for (let i = 0; i < expectedSizes.length; i++) {
+    if (expectedSizes[i] !== actualSizes[i]) return false;
+  }
+  
+  // Проверяем что корабли не пересекаются и не касаются
+  const field = createEmptyField();
+  for (const ship of ships) {
+    if (!canPlaceShip(field, ship.x, ship.y, ship.size, ship.horizontal)) {
+      return false;
+    }
+    placeShip(field, ship.id, ship.x, ship.y, ship.size, ship.horizontal);
+  }
+  
+  return true;
+}
+
+// Получить соседние клетки потопленного корабля
+function getSurroundingCells(ship) {
+  const cells = [];
+  for (const cell of ship.cells) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const nx = cell.x + dx;
+        const ny = cell.y + dy;
+        if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+          const isShipCell = ship.cells.some(c => c.x === nx && c.y === ny);
+          if (!isShipCell) {
+            if (!cells.some(c => c.x === nx && c.y === ny)) {
+              cells.push({ x: nx, y: ny });
+            }
+          }
+        }
+      }
+    }
+  }
+  return cells;
+}
+
+// Проверка победы
+function checkBattleshipWinner(room) {
+  const p1AllSunk = room.ships.p1.every(s => s.hits >= s.size);
+  const p2AllSunk = room.ships.p2.every(s => s.hits >= s.size);
+  
+  if (p1AllSunk) return 'p2';
+  if (p2AllSunk) return 'p1';
+  return null;
+}
+
+app.get('/battleship/room/create', (req, res) => {
+  const id = nanoid(6);
+  battleshipRooms[id] = {
+    id,
+    clientToSeat: {},
+    connected: { p1: false, p2: false },
+    profiles: {
+      p1: { avatar: '⚓', name: '' },
+      p2: { avatar: '⚓', name: '' },
+    },
+    phase: 'setup', // setup, battle, finished
+    ready: { p1: false, p2: false },
+    fields: { p1: null, p2: null },
+    ships: { p1: [], p2: [] },
+    shots: { p1: createEmptyShots(), p2: createEmptyShots() }, // p1 shots = выстрелы ПО p2
+    turn: 'p1',
+    winner: null,
+    gameId: 1,
+    lastMoveId: 0,
+    lastMoveSound: null,
+    lastMoveBy: null,
+    lastSunkShip: null, // для анимации потопления
+  };
+  res.json({ roomId: id });
+});
+
+app.get('/battleship/room/:id/join', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  const clientId = (req.query.clientId || '').toString().trim();
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+  const existingSeat = room.clientToSeat[clientId];
+  if (existingSeat === 1) {
+    room.connected.p1 = true;
+    return res.json({ seat: 1 });
+  }
+  if (existingSeat === 2) {
+    room.connected.p2 = true;
+    return res.json({ seat: 2 });
+  }
+
+  if (!room.connected.p1) {
+    room.clientToSeat[clientId] = 1;
+    room.connected.p1 = true;
+    return res.json({ seat: 1 });
+  }
+  if (!room.connected.p2) {
+    room.clientToSeat[clientId] = 2;
+    room.connected.p2 = true;
+    return res.json({ seat: 2 });
+  }
+
+  return res.status(400).json({ error: 'Room full' });
+});
+
+app.post('/battleship/room/:id/profile', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  const { clientId, name, avatar } = req.body || {};
+  const cid = (clientId || '').toString().trim();
+  if (!cid) return res.status(400).json({ error: 'clientId required' });
+
+  const seat = room.clientToSeat[cid];
+  if (seat !== 1 && seat !== 2) return res.status(400).json({ error: 'Not joined' });
+  const seatKey = seat === 1 ? 'p1' : 'p2';
+
+  const safeName = (name || '').toString().trim().slice(0, 32);
+  const safeAvatar = (avatar || '').toString().trim().slice(0, 4);
+  room.profiles[seatKey] = {
+    name: safeName,
+    avatar: safeAvatar || room.profiles[seatKey]?.avatar || '⚓',
+  };
+
+  res.json({ ok: true, seat, profile: room.profiles[seatKey] });
+});
+
+app.get('/battleship/room/:id/state', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  const clientId = (req.query.clientId || '').toString().trim();
+  const seat = room.clientToSeat[clientId];
+  const seatKey = seat === 1 ? 'p1' : (seat === 2 ? 'p2' : null);
+  const enemyKey = seat === 1 ? 'p2' : (seat === 2 ? 'p1' : null);
+
+  // Скрываем корабли противника (показываем только попадания)
+  let enemyFieldView = null;
+  if (enemyKey && room.phase !== 'setup') {
+    enemyFieldView = createEmptyField();
+    // Показываем только потопленные корабли
+    if (room.ships[enemyKey]) {
+      for (const ship of room.ships[enemyKey]) {
+        if (ship.hits >= ship.size) {
+          for (const cell of ship.cells) {
+            enemyFieldView[cell.y][cell.x] = { shipId: ship.id, sunk: true };
+          }
+        }
+      }
+    }
+  }
+
+  res.json({
+    id: room.id,
+    phase: room.phase,
+    connected: room.connected,
+    profiles: room.profiles,
+    ready: room.ready,
+    turn: room.turn,
+    winner: room.winner,
+    gameId: room.gameId,
+    mySeat: seatKey,
+    myField: seatKey ? room.fields[seatKey] : null,
+    myShips: seatKey ? room.ships[seatKey] : [],
+    myShots: seatKey ? room.shots[seatKey] : null, // мои выстрелы по врагу
+    enemyShots: enemyKey ? room.shots[enemyKey] : null, // выстрелы врага по мне
+    enemyFieldView,
+    lastMoveId: room.lastMoveId,
+    lastMoveSound: room.lastMoveSound,
+    lastMoveBy: room.lastMoveBy,
+    lastSunkShip: room.lastSunkShip,
+  });
+});
+
+// Случайная расстановка
+app.post('/battleship/room/:id/randomize', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.phase !== 'setup') return res.status(400).json({ error: 'Game already started' });
+
+  const { clientId } = req.body || {};
+  const seat = room.clientToSeat[clientId];
+  if (seat !== 1 && seat !== 2) return res.status(400).json({ error: 'Not joined' });
+  
+  const seatKey = seat === 1 ? 'p1' : 'p2';
+  if (room.ready[seatKey]) return res.status(400).json({ error: 'Already ready' });
+
+  const { field, ships } = randomPlacement();
+  room.fields[seatKey] = field;
+  room.ships[seatKey] = ships;
+
+  res.json({ ok: true, field, ships });
+});
+
+// Сохранить расстановку (ручную или после drag&drop)
+app.post('/battleship/room/:id/setships', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.phase !== 'setup') return res.status(400).json({ error: 'Game already started' });
+
+  const { clientId, ships } = req.body || {};
+  const seat = room.clientToSeat[clientId];
+  if (seat !== 1 && seat !== 2) return res.status(400).json({ error: 'Not joined' });
+  
+  const seatKey = seat === 1 ? 'p1' : 'p2';
+  if (room.ready[seatKey]) return res.status(400).json({ error: 'Already ready' });
+
+  if (!validatePlacement(ships)) {
+    return res.status(400).json({ error: 'Invalid ship placement' });
+  }
+
+  // Создаём поле из кораблей
+  const field = createEmptyField();
+  const processedShips = [];
+  
+  for (let i = 0; i < ships.length; i++) {
+    const ship = ships[i];
+    const cells = [];
+    for (let j = 0; j < ship.size; j++) {
+      const cx = ship.horizontal ? ship.x + j : ship.x;
+      const cy = ship.horizontal ? ship.y : ship.y + j;
+      field[cy][cx] = { shipId: i };
+      cells.push({ x: cx, y: cy });
+    }
+    processedShips.push({
+      id: i,
+      size: ship.size,
+      x: ship.x,
+      y: ship.y,
+      horizontal: ship.horizontal,
+      cells,
+      hits: 0
+    });
+  }
+
+  room.fields[seatKey] = field;
+  room.ships[seatKey] = processedShips;
+
+  res.json({ ok: true });
+});
+
+// Нажать "Готов"
+app.post('/battleship/room/:id/ready', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.phase !== 'setup') return res.status(400).json({ error: 'Game already started' });
+
+  const { clientId } = req.body || {};
+  const seat = room.clientToSeat[clientId];
+  if (seat !== 1 && seat !== 2) return res.status(400).json({ error: 'Not joined' });
+  
+  const seatKey = seat === 1 ? 'p1' : 'p2';
+  
+  // Проверяем что корабли расставлены
+  if (!room.ships[seatKey] || room.ships[seatKey].length !== 10) {
+    return res.status(400).json({ error: 'Place all ships first' });
+  }
+
+  room.ready[seatKey] = true;
+
+  // Если оба готовы - начинаем бой
+  if (room.ready.p1 && room.ready.p2) {
+    room.phase = 'battle';
+    room.turn = 'p1'; // Первый ходит первый игрок
+  }
+
+  res.json({ ok: true, phase: room.phase, ready: room.ready });
+});
+
+// Выстрел
+app.post('/battleship/room/:id/shoot', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.phase !== 'battle') return res.status(400).json({ error: 'Not in battle phase' });
+  if (room.winner) return res.status(400).json({ error: 'Game over' });
+
+  const { clientId, x, y } = req.body || {};
+  const seat = room.clientToSeat[clientId];
+  if (seat !== 1 && seat !== 2) return res.status(400).json({ error: 'Not joined' });
+  
+  const seatKey = seat === 1 ? 'p1' : 'p2';
+  const enemyKey = seat === 1 ? 'p2' : 'p1';
+
+  if (room.turn !== seatKey) return res.status(400).json({ error: 'Not your turn' });
+
+  if (x < 0 || x >= 10 || y < 0 || y >= 10) {
+    return res.status(400).json({ error: 'Invalid coordinates' });
+  }
+
+  // Проверяем что туда ещё не стреляли
+  if (room.shots[seatKey][y][x]) {
+    return res.status(400).json({ error: 'Already shot there' });
+  }
+
+  room.shots[seatKey][y][x] = true;
+  room.lastMoveId++;
+  room.lastMoveBy = seatKey;
+  room.lastSunkShip = null;
+
+  const enemyCell = room.fields[enemyKey][y][x];
+  
+  if (enemyCell && enemyCell.shipId !== undefined) {
+    // Попадание!
+    const ship = room.ships[enemyKey].find(s => s.id === enemyCell.shipId);
+    ship.hits++;
+    
+    if (ship.hits >= ship.size) {
+      // Корабль потоплен!
+      room.lastMoveSound = 'sunk';
+      room.lastSunkShip = { ...ship, enemyKey };
+      
+      // Автоматически помечаем соседние клетки как обстрелянные
+      const surrounding = getSurroundingCells(ship);
+      for (const cell of surrounding) {
+        room.shots[seatKey][cell.y][cell.x] = true;
+      }
+    } else {
+      room.lastMoveSound = 'hit';
+    }
+    
+    // При попадании ход остаётся у стреляющего
+    
+    // Проверяем победу
+    room.winner = checkBattleshipWinner(room);
+    if (room.winner) {
+      room.phase = 'finished';
+      room.lastMoveSound = 'win';
+    }
+  } else {
+    // Промах
+    room.lastMoveSound = 'miss';
+    room.turn = enemyKey; // Ход переходит к противнику
+  }
+
+  res.json({
+    ok: true,
+    hit: !!(enemyCell && enemyCell.shipId !== undefined),
+    sunk: room.lastSunkShip,
+    turn: room.turn,
+    winner: room.winner,
+    lastMoveId: room.lastMoveId,
+    lastMoveSound: room.lastMoveSound,
+  });
+});
+
+// Рематч
+app.post('/battleship/room/:id/rematch', (req, res) => {
+  const room = battleshipRooms[req.params.id];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  room.phase = 'setup';
+  room.ready = { p1: false, p2: false };
+  room.fields = { p1: null, p2: null };
+  room.ships = { p1: [], p2: [] };
+  room.shots = { p1: createEmptyShots(), p2: createEmptyShots() };
+  room.turn = 'p1';
+  room.winner = null;
+  room.gameId = (room.gameId || 1) + 1;
+  room.lastMoveId = 0;
+  room.lastMoveSound = null;
+  room.lastMoveBy = null;
+  room.lastSunkShip = null;
 
   res.json({ ok: true, gameId: room.gameId });
 });

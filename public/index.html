@@ -7,9 +7,10 @@
 <link rel="icon" type="image/png" href="icon.png">
 </head>
 <body>
-<nav class="game-switch">
+<nav class="game-switch">  
   <span class="game-switch__label">Шашки</span>
   <button class="game-switch__btn" id="goToUgolki">Уголки</button>
+	<button class="game-switch__btn" id="goToBattleship">Морской бой</button>
 </nav>
 <div class="controls">
   <button class="bubbly-button" id="createRoom">Создать комнату</button>
@@ -625,6 +626,10 @@ async function joinRoomById(id, opts={}){
   if(showModal) showProfileModal(seat===1?'Игрок 1':'Игрок 2');
   return {ok:true};
 }
+
+document.getElementById('goToBattleship').onclick = () => {
+  window.location.href = 'battleship.html';
+};
 
 document.getElementById('goToUgolki').onclick = () => {
   // поменяй 'ugolki.html' на имя файла, где лежит этот клиент уголков

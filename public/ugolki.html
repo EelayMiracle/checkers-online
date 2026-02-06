@@ -18,6 +18,7 @@
 <nav class="game-switch">
   <button class="game-switch__btn" id="goToCheckers">Шашки</button>
   <span class="game-switch__label">Уголки</span>
+  <button class="game-switch__btn" id="goToBattleship">Морской бой</button>
 </nav>
 
 <div class="controls">
@@ -295,6 +296,7 @@ document.getElementById('profileOk').onclick=async()=>{
 
 document.getElementById('createRoom').onclick=async()=>{const r=await fetch('/ugolki/room/create');const d=await r.json();roomId=d.roomId;await joinRoomById(roomId,{showModal:true});};
 document.getElementById('goToCheckers').onclick=()=>{location.href='index.html';};
+document.getElementById('goToBattleship').onclick=()=>{location.href='battleship.html';};
 document.getElementById('invite').onclick=()=>{navigator.clipboard?.writeText?.(`${location.origin}${location.pathname}?room=${roomId}`).then(()=>showToast('ссылка скопирована'))};
 document.getElementById('rematch').onclick=async()=>{await fetch(`/ugolki/room/${roomId}/rematch`,{method:'POST'});await joinRoomById(roomId,{showModal:false,keepProfileConfirmed:true});setWinnerBanner();selectedPiece=null;legalMoves=[];};
 
