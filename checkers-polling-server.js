@@ -1065,7 +1065,9 @@ app.post('/battleship/room/:id/rematch', (req, res) => {
   room.lastMoveSound = null;
   room.lastMoveBy = null;
   room.lastSunkShip = null;
-
   res.json({ ok: true, gameId: room.gameId });
 });
-app.listen(3000, () => console.log('Server on http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
